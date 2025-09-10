@@ -1,8 +1,4 @@
 /**
- * src/rounds/r1_ideation.ts
- *
- * Round 1: Topic Ideation
- *
  * - Reads trends from: runs/{runId}/artifacts/round0  (expects a document with a `trends` array of TrendItem)
  * - Calls Hugging Face (TinyLlama) using the structured prompt provided
  * - Parses JSON output into IdeationItem[]

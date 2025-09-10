@@ -1,6 +1,4 @@
 /**
- * Round 2 - Outline Generation
- *
  * Reads R1 artifact (ideation), generates structured outlines per idea
  * using Hugging Face Phi-3 Mini, and saves results back to Firestore.
  */

@@ -1,8 +1,4 @@
 /**
- * tests/r1_ideation.test.ts
- *
- * Jest tests for r1_ideation.ts
- *
  * This suite tests the main function `runRound1` for:
  * - Core success case: reading trends, calling LLM, and writing ideas
  * - Schema validation of the output

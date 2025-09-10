@@ -1,5 +1,4 @@
 /* 
- * Round 0 — Trend & Topic Input
  * Deterministic, zero-cost by default. Optionally prunes/scores via a tiny HF model.
  *
  * Inputs:

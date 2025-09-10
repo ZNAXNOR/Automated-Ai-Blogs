@@ -1,7 +1,3 @@
-/**
- * Jest tests for Round 2 - Outline Generation
- */
-
 import { runRound2Outline, OutlineItem, _test } from "@src/rounds/r2_outline";
 import { IdeationItem } from "@src/rounds/r1_ideate";
 import fetch from "node-fetch";
