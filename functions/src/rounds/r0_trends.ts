@@ -20,9 +20,9 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import { onCall } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
-import { env } from "@utils/config"; // expects SERP_API_KEY, HF_TOKEN, USE_R0_LLM, CACHE_TTL_HOURS
-import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } from "@clients/serp";
-import { getCache, setCache } from "@utils/cache";
+import { env } from "../utils/config"; // expects SERP_API_KEY, HF_TOKEN, USE_R0_LLM, CACHE_TTL_HOURS
+import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } from "../clients/serp";
+import { getCache, setCache } from "../utils/cache";
 import * as crypto from "crypto";
 
 // --- Types -------------------------------------------------------------------
@@ -182,7 +182,7 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
 
   try {
     // Lazy import to avoid dependency if unused
-    const { hfTinyComplete } = await import("@clients/hf");
+    const { hfTinyComplete } = await import("../clients/hf");
     const csv = await hfTinyComplete(prompt); // returns small CSV string or empty
     if (!csv) return items;
 

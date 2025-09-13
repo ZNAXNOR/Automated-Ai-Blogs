@@ -3,12 +3,12 @@
  * If SERP_API_KEY absent, module gracefully degrades: functions return [] and serpAvailable() is false.
  */
 
-import { env } from "../../utils/config";
+import { env } from "../utils/config";
 
 const BASE = "https://serpapi.com";
 
 export function serpAvailable() {
-  return !!env.SERP_API_KEY;
+  return !!env.serpApiKey;
 }
 
 async function fetchJson(url: string): Promise<any> {
@@ -27,7 +27,7 @@ export async function getSerpSuggestions(seeds: string[], region?: string): Prom
   for (const q of seeds) {
     const url = `${BASE}/search.json?engine=google_autocomplete&q=${encodeURIComponent(q)}&hl=en&gl=${encodeURIComponent(
       region || "us"
-    )}&api_key=${env.SERP_API_KEY}`;
+    )}&api_key=${env.serpApiKey}`;
     try {
       const json = await fetchJson(url);
       const suggestions: any[] = json?.suggestions || json?.suggested_queries || [];
@@ -52,7 +52,7 @@ export async function getSerpRelated(seeds: string[], region?: string): Promise<
   for (const q of seeds) {
     const url = `${BASE}/search.json?engine=google&q=${encodeURIComponent(q)}&hl=en&gl=${encodeURIComponent(
       region || "us"
-    )}&api_key=${env.SERP_API_KEY}`;
+    )}&api_key=${env.serpApiKey}`;
     try {
       const json = await fetchJson(url);
       const related: any[] =
@@ -77,7 +77,7 @@ export async function getSerpTrending(region?: string): Promise<string[]> {
   if (!serpAvailable()) return [];
   const url = `${BASE}/search.json?engine=google_trends_trending_now&hl=en&gl=${encodeURIComponent(
     region || "us"
-  )}&api_key=${env.SERP_API_KEY}`;
+  )}&api_key=${env.serpApiKey}`;
 
   try {
     const json = await fetchJson(url);

@@ -10,7 +10,7 @@
  *   - Max cap of 60 ideas enforced
  */
 
-import { runRound1, IdeationItem } from "@src/rounds/r1_ideate";
+import { runRound1, IdeationItem } from "../../../rounds/r1_ideate";
 import admin from "firebase-admin";
 import fetch, { Response } from "node-fetch";
 

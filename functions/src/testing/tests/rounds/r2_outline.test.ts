@@ -1,5 +1,5 @@
-import { runRound2Outline, OutlineItem, _test } from "@src/rounds/r2_outline";
-import { IdeationItem } from "@src/rounds/r1_ideate";
+import { runRound2Outline, OutlineItem, _test } from "../../../rounds/r2_outline";
+import { IdeationItem } from "../../../rounds/r1_ideate";
 import fetch from "node-fetch";
 
 const mockFirestoreStore: Record<string, any> = {};
@@ -113,12 +113,14 @@ describe("Round2 Outline Generation", () => {
   });
 
   test("throws error if model returns invalid JSON", async () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockedFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => [{ generated_text: "NOT JSON" }],
     });
 
     await expect(runRound2Outline("testRun")).rejects.toThrow();
+    consoleErrorSpy.mockRestore();
   });
 
   test("buildPrompt includes all R1 ideas", () => {

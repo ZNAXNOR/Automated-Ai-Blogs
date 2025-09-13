@@ -5,6 +5,7 @@
 
 import { getFirestore } from "firebase-admin/firestore";
 import fetch from "node-fetch";
+import { env } from "../utils/config";
 
 // ---- Types ----
 
@@ -65,15 +66,11 @@ ${JSON.stringify(ideas, null, 2)}
 async function callPhi3Mini(prompt: string): Promise<OutlineItem[]> {
   const HF_API_URL =
     "https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct";
-  const HF_API_KEY = process.env.HF_API_KEY;
-  if (!HF_API_KEY) {
-    throw new Error("HF_API_KEY is not set in environment");
-  }
 
   const response = await fetch(HF_API_URL, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${HF_API_KEY}`,
+      Authorization: `Bearer ${env.HF_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

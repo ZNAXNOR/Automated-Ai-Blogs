@@ -1,4 +1,4 @@
-import { _test, TrendItem } from "@src/rounds/r0_trends";
+import { _test, TrendItem } from "../../../rounds/r0_trends";
 
 describe("Round0 deterministic processing", () => {
   test("normalizes, filters, dedupes, and limits to 12", () => {

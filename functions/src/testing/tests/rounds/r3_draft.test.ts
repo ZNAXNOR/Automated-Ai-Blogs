@@ -1,4 +1,4 @@
-import { wordCount, OutlineItem, generateDraftForOutline, DraftDocument, processOutlines } from '../../src/rounds/r3_draft';
+import { wordCount, OutlineItem, generateDraftForOutline, DraftDocument, processOutlines } from '../../../rounds/r3_draft';
 
 const mockGenerator = async (prompt: string): Promise<string> => {
     return 'This is a generated draft. '.repeat(20);

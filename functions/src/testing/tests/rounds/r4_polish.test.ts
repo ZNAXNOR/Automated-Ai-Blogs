@@ -1,4 +1,4 @@
-import { _test } from "../../src/rounds/r4_polish";
+import { _test } from "../../../rounds/r4_polish";
 
 // Mock Google AI plugin
 jest.mock("@genkit-ai/googleai", () => ({

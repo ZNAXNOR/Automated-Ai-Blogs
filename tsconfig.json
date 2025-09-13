@@ -13,6 +13,6 @@
       "@src/*": ["functions/src/*"]
     }
   },
-  "include": ["functions/src/**/*.ts", "functions/tests/**/*.ts"],
+  "include": ["functions/src/**/*.ts", "functions/src/testing/tests/**/*.ts"],
   "exclude": ["node_modules"]
 }

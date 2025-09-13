@@ -18,9 +18,9 @@ export type OutlineItem = {
     outline: string;
     draft: string;
     metadata: {
-    wordCount: number;
-    createdAt: number; // epoch ms
-    };
+        wordCount: number;
+        createdAt: number; // epoch ms
+        };
     };
     
     
