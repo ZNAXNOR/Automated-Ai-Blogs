@@ -4,7 +4,7 @@
  * If HF token is missing, returns empty string.
  */
 
-import { env } from "../../utils/config";
+import { env } from "../utils/config";
 
 const HF_ENDPOINT = "https://api-inference.huggingface.co/models/TheBloke/TinyLlama-1.1B-Chat-v1.0";
 

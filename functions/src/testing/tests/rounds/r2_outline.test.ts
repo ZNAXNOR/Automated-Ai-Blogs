@@ -24,7 +24,7 @@ jest.mock("firebase-admin/firestore", () => {
 // --- Fetch Mock ---
 jest.mock("node-fetch", () => jest.fn());
 
-const mockedFetch = fetch as jest.Mock;
+const mockedFetch = fetch as unknown as jest.Mock;
 
 beforeEach(() => {
   Object.keys(mockFirestoreStore).forEach((k) => delete mockFirestoreStore[k]);
