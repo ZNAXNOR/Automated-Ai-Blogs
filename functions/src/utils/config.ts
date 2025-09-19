@@ -24,4 +24,5 @@ export const env = {
     hfModelR1: 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
     hfModelR2: 'microsoft/Phi-3-mini-4k-instruct',
     hfModelR3: 'mistralai/Mistral-7B-Instruct-v0.2',
+    hfModelR4: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
 };

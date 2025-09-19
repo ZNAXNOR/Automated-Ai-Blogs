@@ -5,12 +5,9 @@
  */
 
 import { onCall } from "firebase-functions/v2/https";
-import { genkit, z } from "genkit";
 import { getFirestore } from "firebase-admin/firestore";
-import { googleAI } from '@genkit-ai/googleai';
-
-// Initialize Genkit
-const ai = genkit({ plugins: [googleAI()] });
+import { env } from "../utils/config";
+import fetch from "node-fetch";
 
 function buildPrompt(draftText: string): string {
   return `
@@ -19,6 +16,7 @@ You refine draft blog sections into polished, human-readable text, then decide t
 Where suitable, embed inline suggestions for memes, screenshots, artwork, or other images. 
 If no distribution formats apply, skip them. 
 Always prioritize clarity and reader engagement.
+You must output in a valid JSON format, with the following structure: {"polished": "...", "derivatives": ["...", "..."]}.
 
 User: Here is a draft blog section. 
 1. First, polish the tone and readability. 
@@ -30,6 +28,55 @@ ${draftText}
 `;
 }
 
+async function callHuggingFace(prompt: string): Promise<{ polished: string; derivatives: string[] }> {
+    const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR4}`;
+
+    const response = await fetch(HF_API_URL, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.HF_API_KEY}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            inputs: prompt,
+            parameters: {
+                max_new_tokens: 1024,
+                temperature: 0.7,
+                return_full_text: false,
+            },
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as any;
+
+    let text: string;
+    if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
+        text = data[0].generated_text;
+    } else if (typeof data === "object" && data.generated_text) {
+        text = data.generated_text;
+    } else {
+        text = JSON.stringify(data);
+    }
+
+    try {
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            console.error("No JSON found in model response:", text);
+            throw new Error("Failed to parse JSON from model: No JSON found");
+        }
+        const parsed = JSON.parse(jsonMatch[0]);
+        return parsed;
+    } catch (err) {
+        console.error("Failed to parse JSON from model:", text);
+        throw err;
+    }
+}
+
+
 async function runR4Polish(draftId: string, draftText: string) {
   if (!draftId || !draftText) {
     throw new Error("Missing required fields: draftId, draftText");
@@ -40,21 +87,7 @@ async function runR4Polish(draftId: string, draftText: string) {
   const prompt = buildPrompt(draftText);
 
   // Call LLM
-  const response = await ai.generate({
-    prompt,
-    output: {
-      schema: z.object({
-        polished: z.string(),
-        derivatives: z.array(z.string()),
-      }),
-    }
-  });
-
-  if (!response.output) {
-    throw new Error("AI failed to generate a response");
-  }
-
-  const { polished, derivatives } = response.output;
+  const { polished, derivatives } = await callHuggingFace(prompt);
 
   // Validation rules
   if (!polished || polished.trim().length === 0) {

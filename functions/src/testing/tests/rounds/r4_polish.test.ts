@@ -1,25 +1,9 @@
 import { _test } from "../../../rounds/r4_polish";
+import fetch from "node-fetch";
 
-// Mock Google AI plugin
-jest.mock("@genkit-ai/googleai", () => ({
-  googleAI: jest.fn(),
-}));
+const { Response } = jest.requireActual("node-fetch");
 
-// A var is used here to get around Jest's hoisting and the Temporal Dead Zone.
-// This allows the mockGenerate variable to be assigned from within the jest.mock factory.
-var mockGenerate: jest.Mock;
-
-jest.mock("genkit", () => {
-  const originalGenkit = jest.requireActual("genkit");
-  const mg = jest.fn();
-  mockGenerate = mg;
-  return {
-    ...originalGenkit,
-    genkit: jest.fn(() => ({
-      generate: mg,
-    })),
-  };
-});
+jest.mock("node-fetch", () => jest.fn());
 
 // Mock Firestore
 const setMock = jest.fn();
@@ -35,7 +19,7 @@ jest.mock("firebase-admin/firestore", () => ({
 
 describe("r4_polish", () => {
   afterEach(() => {
-    mockGenerate.mockClear();
+    (fetch as unknown as jest.Mock).mockClear();
     setMock.mockClear();
   });
 
@@ -55,62 +39,56 @@ describe("r4_polish", () => {
     it("should return polished and derivatives", async () => {
       const draftId = "testId";
       const draftText = "test text";
-      const prompt = _test.buildPrompt(draftText);
 
-      mockGenerate.mockResolvedValue({
-          output: {
-            polished: `Polished: ${prompt}`,
-            derivatives: [`Derivative 1: ${prompt}`, `Derivative 2: ${prompt}`],
-          },
-      });
+      const mockResponse = {
+        polished: `Polished: test text`,
+        derivatives: [`Derivative 1: test text`, `Derivative 2: test text`],
+      };
+
+      (fetch as unknown as jest.Mock).mockResolvedValue(new Response(JSON.stringify([{ generated_text: JSON.stringify(mockResponse) }])));
 
       const result = await _test.runR4Polish(draftId, draftText);
 
       expect(result.draftId).toBe(draftId);
-      expect(result.polished).toBe(`Polished: ${prompt}`);
-      expect(result.derivatives).toEqual([`Derivative 1: ${prompt}`, `Derivative 2: ${prompt}`]);
+      expect(result.polished).toBe(mockResponse.polished);
+      expect(result.derivatives).toEqual(mockResponse.derivatives);
 
       expect(setMock).toHaveBeenCalledTimes(1);
       const writtenData = setMock.mock.calls[0][0];
       expect(writtenData.draftId).toBe(draftId);
-      expect(writtenData.polished).toBe(`Polished: ${prompt}`);
+      expect(writtenData.polished).toBe(mockResponse.polished);
     });
 
     it("should throw error for empty polished text", async () => {
-        mockGenerate.mockResolvedValue({
-            output: {
-                polished: "",
-                derivatives: ["d1", "d2"],
-            },
-        });
+        const mockResponse = {
+            polished: "",
+            derivatives: ["d1", "d2"],
+        };
+        (fetch as unknown as jest.Mock).mockResolvedValue(new Response(JSON.stringify([{ generated_text: JSON.stringify(mockResponse) }])));
         await expect(_test.runR4Polish("id", "text")).rejects.toThrow("Polished text is empty");
     });
 
     it("should throw error for not enough derivatives", async () => {
-        mockGenerate.mockResolvedValue({
-            output: {
-                polished: "p1",
-                derivatives: ["d1"],
-            },
-        });
+        const mockResponse = {
+            polished: "p1",
+            derivatives: ["d1"],
+        };
+        (fetch as unknown as jest.Mock).mockResolvedValue(new Response(JSON.stringify([{ generated_text: JSON.stringify(mockResponse) }])));
         await expect(_test.runR4Polish("id", "text")).rejects.toThrow("Each draft must produce ≥ 2 derivative outputs");
     });
 
     it("should throw error for empty derivative", async () => {
-        mockGenerate.mockResolvedValue({
-            output: {
-                polished: "p1",
-                derivatives: ["d1", " "],
-            },
-        });
+        const mockResponse = {
+            polished: "p1",
+            derivatives: ["d1", " "],
+        };
+        (fetch as unknown as jest.Mock).mockResolvedValue(new Response(JSON.stringify([{ generated_text: JSON.stringify(mockResponse) }])));
         await expect(_test.runR4Polish("id", "text")).rejects.toThrow("Derivative output is empty");
     });
     
     it("should throw error for AI failure", async () => {
-        mockGenerate.mockResolvedValue({
-            output: null,
-        });
-        await expect(_test.runR4Polish("id", "text")).rejects.toThrow("AI failed to generate a response");
+        (fetch as unknown as jest.Mock).mockResolvedValue(new Response(JSON.stringify([{ generated_text: "invalid json" }])));
+        await expect(_test.runR4Polish("id", "text")).rejects.toThrow();
     });
 
   });
