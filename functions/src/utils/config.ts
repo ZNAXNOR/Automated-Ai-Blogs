@@ -25,4 +25,5 @@ export const env = {
     hfModelR2: 'microsoft/Phi-3-mini-4k-instruct',
     hfModelR3: 'mistralai/Mistral-7B-Instruct-v0.2',
     hfModelR4: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
+    hfModelR5: 'google/gemma-2-7b-it',
 };
