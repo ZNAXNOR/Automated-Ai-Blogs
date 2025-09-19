@@ -1,6 +1,6 @@
 /**
  * Reads R1 artifact (ideation), generates structured outlines per idea
- * using Hugging Face Phi-3 Mini, and saves results back to Firestore.
+ * using Hugging Face, and saves results back to Firestore.
  */
 
 import { getFirestore } from "firebase-admin/firestore";
@@ -63,9 +63,8 @@ ${JSON.stringify(ideas, null, 2)}
 
 // ---- Model Call ----
 
-async function callPhi3Mini(prompt: string): Promise<OutlineItem[]> {
-  const HF_API_URL =
-    "https://api-inference.huggingface.co/models/microsoft/Phi-3-mini-4k-instruct";
+async function callHuggingFace(prompt: string): Promise<OutlineItem[]> {
+  const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR2}`;
 
   const response = await fetch(HF_API_URL, {
     method: "POST",
@@ -128,8 +127,8 @@ export async function runRound2Outline(runId: string): Promise<OutlineItem[]> {
   // 2. Build prompt
   const prompt = buildPrompt(items);
 
-  // 3. Call Phi-3 Mini
-  const outlines = await callPhi3Mini(prompt);
+  // 3. Call Model
+  const outlines = await callHuggingFace(prompt);
 
   // 4. Save to Firestore
   await db
@@ -142,5 +141,5 @@ export async function runRound2Outline(runId: string): Promise<OutlineItem[]> {
 // Expose helpers for testing
 export const _test = {
   buildPrompt,
-  callPhi3Mini,
+  callHuggingFace,
 };

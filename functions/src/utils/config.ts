@@ -22,4 +22,5 @@ export const env = {
     useR0Llm: process.env.USE_R0_LLM === 'true',
     CACHE_TTL_HOURS: Number(process.env.CACHE_TTL_HOURS) || 24,
     hfModelR1: 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
+    hfModelR2: 'microsoft/Phi-3-mini-4k-instruct',
 };
