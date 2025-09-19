@@ -26,4 +26,5 @@ export const env = {
     hfModelR3: 'mistralai/Mistral-7B-Instruct-v0.2',
     hfModelR4: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
     hfModelR5: 'google/gemma-2-7b-it',
+    hfModelR6: 'sentence-transformers/all-MiniLM-L6-v2',
 };

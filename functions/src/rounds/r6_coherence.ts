@@ -1,84 +1,70 @@
-import { firestore } from "firebase-admin";
-import { z } from "zod";
-import { LLMClient } from "../utils/llmClient";
-import admin from "firebase-admin";
+/**
+ * - Takes Round 4 polished text and derivatives
+ * - Assesses coherence of the polished text against the derivatives
+ * - Stores results in Firestore collection: round6_coherence
+ */
 
-if (!admin.apps.length) {
-  admin.initializeApp();
+import { onCall } from "firebase-functions/v2/https";
+import { getFirestore } from "firebase-admin/firestore";
+import { env } from "../utils/config";
+import fetch from "node-fetch";
+
+async function callHuggingFace(text: string, textsToCompare: string[]): Promise<number[]> {
+    const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR6}`;
+
+    const response = await fetch(HF_API_URL, {
+        method: "POST",
+        headers: {
+            Authorization: `Bearer ${env.HF_API_KEY}`,
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            inputs: {
+                source_sentence: text,
+                sentences: textsToCompare,
+            },
+        }),
+    });
+
+    if (!response.ok) {
+        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = (await response.json()) as any;
+    return data;
 }
 
-const llm = new LLMClient();
-
-// Firestore refs
-const db = firestore();
-const inputCollection = db.collection("round5_metadata");
-const outputCollection = db.collection("round6_coherence");
-
-// Schema for LLM JSON output validation
-const CoherenceSchema = z.object({
-  validatedText: z.string().min(20),
-  issuesFound: z.array(z.string()),
-  coherenceScore: z.number().min(0).max(1),
-  metadataAlignment: z.boolean(),
-});
-
-export async function runRound6(trendId: string) {
-  const doc = await inputCollection.doc(trendId).get();
-  if (!doc.exists) throw new Error(`No Round5 doc found for ${trendId}`);
-
-  const { draftText, metadata } = doc.data() as any;
-
-  // Build prompt
-  const prompt = `
-You are a Coherence & Consistency Validator.  
-
-Input:  
-- Blog Draft: ${draftText}  
-- Metadata: ${JSON.stringify(metadata)}  
-
-Tasks:  
-1. Check flow and coherence of the draft.  
-2. Ensure metadata keywords and tags appear naturally in the text.  
-3. Detect and flag duplicated, repetitive, or irrelevant sections.  
-4. If content is already coherent → do not rewrite, just confirm.  
-5. If content has minor incoherence → suggest minimal edits (do not expand).  
-
-Output strictly in JSON:  
-{
-  "validatedText": "...",
-  "issuesFound": ["..."],
-  "coherenceScore": 0.0-1.0,
-  "metadataAlignment": true/false
-}
-`;
+async function runR6Coherence(draftId: string, polishedText: string, derivatives: string[]) {
+  if (!draftId || !polishedText || !derivatives || derivatives.length === 0) {
+    throw new Error("Missing required fields: draftId, polishedText, derivatives");
+  }
+  
+  const db = getFirestore();
 
   // Call LLM
-  const raw = await llm.generate({
-    prompt,
-    model: "gemini-1.5-pro",
-    temperature: 0,
-    max_tokens: 1024,
-  });
-
-  let parsed;
-  try {
-    parsed = CoherenceSchema.parse(JSON.parse(raw.text));
-  } catch (err) {
-    throw new Error("Invalid LLM JSON output: " + err);
-  }
-
-  // Extra check: ensure validatedText is close to original length
-  const ratio =
-    parsed.validatedText.length / Math.max(draftText.length, 1);
-  if (ratio < 0.9) {
-    parsed.issuesFound.push("Validated text shorter than 90% of draft");
-  }
+  const scores = await callHuggingFace(polishedText, derivatives);
+  const averageScore = scores.reduce((a, b) => a + b, 0) / scores.length;
 
   // Save to Firestore
-  await outputCollection.doc(trendId).set({
-    trendId,
-    ...parsed,
+  const docRef = db.collection("round6_coherence").doc(draftId);
+  await docRef.set({
+    draftId,
+    coherenceScore: averageScore,
+    createdAt: new Date().toISOString(),
   });
 
-  return parsed;
+  return { draftId, coherenceScore: averageScore };
 }
+
+export const r6_coherence = onCall(
+  { timeoutSeconds: 300, memory: "1GiB" },
+  async (request) => {
+    const { draftId, polishedText, derivatives } = request.data;
+    return runR6Coherence(draftId, polishedText, derivatives);
+  }
+);
+
+// Export for testing
+export const _test = {
+    runR6Coherence
+};
