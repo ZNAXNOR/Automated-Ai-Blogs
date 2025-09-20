@@ -1,0 +1,28 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`Round 5 - Metadata & Image Assets generates valid metadata for a single draft and matches snapshot 1`] = `
+{
+  "categories": [
+    "Marketing",
+    "Technology",
+  ],
+  "excerpt": "This is a detailed exploration into how artificial intelligence is fundamentally changing the marketing landscape. We cover everything from personalized content creation and automated campaign management to the ethical challenges that arise. Our guide provides practical, actionable advice for businesses looking to integrate AI into their workflows, ensuring they can leverage these powerful tools to connect with audiences more effectively and achieve a higher return on investment in a competitive digital world.",
+  "imageSuggestions": [
+    "prompt: A futuristic marketing dashboard with glowing charts and AI icons.",
+    "reuse: Company logo on a dark background.",
+  ],
+  "metaDescription": "Explore the top AI-driven marketing strategies, tools, and use cases to stay ahead. Optimize your campaigns and drive growth with our expert insights.",
+  "relatedKeywords": [
+    "AI in digital marketing",
+    "Marketing automation",
+    "AI content generation",
+  ],
+  "seoTitle": "AI Marketing Trends: A Comprehensive Guide for 2024",
+  "tags": [
+    "AI Marketing",
+    "Digital Strategy",
+    "Content Automation",
+    "MarTech",
+  ],
+}
+`;

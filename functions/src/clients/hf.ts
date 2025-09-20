@@ -9,12 +9,12 @@ import { env } from "../utils/config";
 const HF_ENDPOINT = "https://api-inference.huggingface.co/models/TheBloke/TinyLlama-1.1B-Chat-v1.0";
 
 export async function hfTinyComplete(prompt: string): Promise<string> {
-  if (!env.HF_TOKEN) return "";
+  if (!env.hfToken) return "";
   try {
     const res = await fetch(HF_ENDPOINT, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${env.HF_TOKEN}`,
+        "Authorization": `Bearer ${env.hfToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

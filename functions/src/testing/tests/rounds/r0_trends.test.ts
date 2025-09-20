@@ -41,6 +41,8 @@ describe("Round0 deterministic processing", () => {
     expect(items.length).toBeLessThanOrEqual(12);
     for (const it of items) {
       expect(typeof it.query).toBe("string");
+      expect(it.query).toMatch(/^[A-Za-z0-9].+/); // must start with alphanumeric
+      expect(it.query.split(" ").length).toBeGreaterThanOrEqual(2);
       expect(["autocomplete", "related", "trending", "rss"]).toContain(it.type);
       expect(typeof it.score).toBe("number");
       expect(it.score).toBeGreaterThanOrEqual(0);
@@ -116,12 +118,12 @@ describe("Round0 deterministic processing", () => {
       {
         type: "rss" as const,
         sourceName: "rss:test",
-        items: ["Alpha", "Beta"],
+        items: ["Alpha Centauri", "Beta Pictoris"],
       },
       {
         type: "trending" as const,
         sourceName: "serp:trending",
-        items: ["Gamma"],
+        items: ["Gamma Ray Burst"],
       },
     ];
 

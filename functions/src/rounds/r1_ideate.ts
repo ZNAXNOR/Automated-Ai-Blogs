@@ -62,11 +62,11 @@ Input: ${JSON.stringify(trendQueries)}
 }
 
 async function callHuggingFace(prompt: string): Promise<string> {
-  const HF_API_KEY = process.env.HUGGINGFACE_API_KEY;
+  const hfToken = env.hfToken;
   const HF_MODEL = env.hfModelR1;
 
-  if (!HF_API_KEY) {
-    throw new Error("HUGGINGFACE_API_KEY environment variable is not set.");
+  if (!hfToken) {
+    throw new Error("HF_TOKEN environment variable is not set.");
   }
   if (!HF_MODEL || HF_MODEL.includes("<set-your-model")) {
     throw new Error("HUGGINGFACE_MODEL environment variable is not set to a valid model slug.");
@@ -85,7 +85,7 @@ async function callHuggingFace(prompt: string): Promise<string> {
   const res = await fetch(HF_ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${HF_API_KEY}`,
+      Authorization: `Bearer ${hfToken}`,
       "Content-Type": "application/json",
       Accept: "application/json",
     },
@@ -170,7 +170,7 @@ function mapToIdeationItems(parsed: any[]): IdeationItem[] {
   return items.filter((it) => it.idea.trim().length > 0);
 }
 
-export async function runRound1(runId: string): Promise<{ wrote: number }> {
+export async function Round1_Ideate(runId: string): Promise<{ wrote: number }> {
   if (!runId) throw new Error("runId is required");
 
   const db = admin.firestore();

@@ -20,7 +20,7 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import { onCall } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
-import { env } from "../utils/config"; // expects SERP_API_KEY, HF_TOKEN, USE_R0_LLM, CACHE_TTL_HOURS
+import { env } from "../utils/config";
 import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } from "../clients/serp";
 import { getCache, setCache } from "../utils/cache";
 import * as crypto from "crypto";
@@ -56,12 +56,11 @@ if (!admin.apps.length) {
 const db = admin.firestore();
 
 // --- Lightweight RSS sources (fallback) --------------------------------------
-// You can safely modify/extend this list.
 const RSS_SOURCES: { name: string; url: string }[] = [
   { name: "rss:theverge", url: "https://www.theverge.com/rss/index.xml" },
   { name: "rss:techcrunch", url: "https://techcrunch.com/feed/" },
   { name: "rss:bbcworld", url: "https://feeds.bbci.co.uk/news/world/rss.xml" },
-  { name: "rss:reutersworld", url: "https://feeds.reuters.com/reuters/worldNews" },
+  { name: "rss:nytimes", url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml" },
 ];
 
 // --- Utilities ---------------------------------------------------------------
@@ -70,7 +69,6 @@ const ROUND = 0;
 
 function logStep(runId: string, step: string, startMs: number) {
   const durationMs = Date.now() - startMs;
-  // Use console.log for structured logs in emulator & prod
   console.log(JSON.stringify({ runId, round: ROUND, step, durationMs }));
 }
 
@@ -92,23 +90,22 @@ function sha256(str: string) {
   return crypto.createHash("sha256").update(str, "utf8").digest("hex");
 }
 
-// Keep '+', '#', and '-'; strip other punctuation.
 function stripPunctKeepSymbols(s: string): string {
-  return s.replace(/[!"$%&'()*.,\/:;<=>?@\[\\\]^_`{|}~]/g, " "); // keep +, #, and -
+  return s.replace(/[!"$%&'()*.,\/:;<=>?@\[\\\]^_`{|}~]/g, " ");
 }
 
-// Normalize: lowercase, trim, collapse spaces, truncate to 6 words
 export function normalizeQuery(raw: string): string {
   const s = stripPunctKeepSymbols(raw.toLowerCase())
     .replace(/\s+/g, " ")
     .trim();
-  const words = s.split(" ").filter(Boolean).slice(0, 6);
+  const words = s.split(" ").filter(Boolean).slice(0, 4);
   return words.join(" ");
 }
 
-// Filters per spec
 export function shouldDrop(q: string): boolean {
   const tokens = q.split(" ").filter(Boolean);
+  if (tokens.length < 2) return true;
+
   const hasPersonal = /\b(my|me|account|password)\b/.test(q);
   if (hasPersonal) return true;
 
@@ -116,17 +113,12 @@ export function shouldDrop(q: string): boolean {
   if (tokens.length > 0 && numericCount / tokens.length > 0.6) return true;
 
   const generic = ["news", "update", "latest"];
-  const containsGeneric = tokens.some(t => generic.includes(t));
-  if (containsGeneric) {
-    // allow if paired with context like "apple latest" (≥ 2 tokens and not only generic)
-    if (tokens.length === 1 && generic.includes(tokens[0])) return true;
-    const nonGenericCount = tokens.filter(t => !generic.includes(t)).length;
-    if (nonGenericCount === 0) return true;
-  }
+  const isGeneric = tokens.every(t => generic.includes(t));
+  if (isGeneric) return true;
+
   return false;
 }
 
-// Simple Levenshtein (enough for small N)
 function levenshtein(a: string, b: string): number {
   if (a === b) return 0;
   if (a.length === 0) return b.length;
@@ -161,16 +153,13 @@ function nearDuplicate(a: string, b: string): boolean {
   return levenshtein(a, b) <= 2 || tokenOverlap(a, b) >= 0.75;
 }
 
-// Optionally call a tiny HF LLM to prune/score (kept very cheap)
-// If env.HF_TOKEN missing or useLLM=false, skip and return passthrough.
 async function optionalLlmPrune(
   items: TrendItem[],
   useLLM: boolean | undefined
 ): Promise<TrendItem[]> {
   if (!useLLM && !env.useR0Llm) return items;
-  if (!env.HF_TOKEN) return items;
+  if (!env.hfToken) return items;
 
-  // Token-efficient prompt: rank by general audience interest + freshness proxies
   const prompt =
 `You are scoring short search queries for blog topics.
 Keep 12 or fewer. Prefer widely interesting, multi-source, and non-duplicative.
@@ -181,9 +170,8 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
 `;
 
   try {
-    // Lazy import to avoid dependency if unused
     const { hfTinyComplete } = await import("../clients/hf");
-    const csv = await hfTinyComplete(prompt); // returns small CSV string or empty
+    const csv = await hfTinyComplete(prompt);
     if (!csv) return items;
 
     const boosts = new Map<string, number>();
@@ -201,7 +189,6 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
       score: Math.max(0, Math.min(1, i.score + (boosts.get(i.query) ?? 0))),
     }));
 
-    // Re-sort and clamp to 12
     boosted.sort((a, b) => (b.score - a.score) || (a.query.length - b.query.length));
     return boosted.slice(0, 12);
   } catch (e) {
@@ -210,27 +197,44 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
   }
 }
 
-// --- RSS fetch & parse (lightweight) ----------------------------------------
-// Minimal parser: extract <title>...</title> from top items (ignores CDATA nuances gracefully)
 async function fetchRssTitles(url: string, limit = 20): Promise<string[]> {
-  const res = await fetch(url, { method: "GET", redirect: "follow" });
-  const text = await res.text();
-  const titles: string[] = [];
-  const re = /<title>([\s\S]*?)<\/title>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(text)) !== null) {
-    const raw = m[1]
-      .replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1")
-      .replace(/\s+/g, " ")
-      .trim();
-    // Skip the feed-level title (usually first one)
-    if (raw && titles.length < limit) titles.push(raw);
+  try {
+    const res = await fetch(url, { method: "GET", redirect: "follow" });
+    if (!res.ok) {
+      console.warn(`Failed to fetch RSS feed from ${url}, status: ${res.status}`);
+      return [];
+    }
+    const text = await res.text();
+    const titles: string[] = [];
+    const itemRegex = /<(?:item|entry)>([\s\S]*?)<\/(?:item|entry)>/gi;
+    let match;
+    while ((match = itemRegex.exec(text)) !== null) {
+      const itemContent = match[1];
+      const titleRegex = /<title[^>]*>([\s\S]*?)<\/title>/i;
+      const titleMatch = itemContent.match(titleRegex);
+      if (titleMatch && titleMatch[1]) {
+        const raw = titleMatch[1]
+          .replace(/<!\[CDATA\[(.*?)\]\]>/g, "$1")
+          .replace(/<[^>]+>/g, "")
+          .replace(/&amp;/g, "&")
+          .replace(/&quot;/g, '"')
+          .replace(/&apos;/g, "'")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (raw && titles.length < limit) {
+          titles.push(raw);
+        }
+      }
+    }
+    console.log(`Found ${titles.length} titles from ${url}`);
+    return titles;
+  } catch (error) {
+    console.warn(`Error fetching or parsing RSS feed from ${url}:`, error);
+    return [];
   }
-  // Remove the first title if it is the channel title (heuristic)
-  return titles.length > 1 ? titles.slice(1) : titles;
 }
-
-// --- Core deterministic pipeline --------------------------------------------
 
 export function deterministicProcess(
   buckets: SourceBucket[]
@@ -243,7 +247,6 @@ export function deterministicProcess(
       if (!q || shouldDrop(q)) continue;
 
       if (collected.has(q)) {
-        // Merge source/type
         const existing = collected.get(q)!;
         const newSources = new Set([...existing.source, b.sourceName]);
         existing.source = [...newSources];
@@ -263,14 +266,12 @@ export function deterministicProcess(
     }
   }
 
-  // Near-duplicate merge
   const merged: TrendItem[] = [];
   for (const item of Array.from(collected.values())) {
     const dupIdx = merged.findIndex(m => nearDuplicate(m.query, item.query));
     if (dupIdx === -1) {
       merged.push(item);
     } else {
-      // merge sources and keep best type (prefer trending > related > autocomplete > rss)
       const target = merged[dupIdx];
       const src = new Set([...target.source, ...item.source]);
       target.source = [...src];
@@ -280,13 +281,12 @@ export function deterministicProcess(
     }
   }
 
-  // Scoring
   const fromTrending = new Set(
     merged.filter(i => i.source.some(s => s.startsWith("serp:trending"))).map(i => i.query)
   );
 
   const itemsScored = merged.map(i => {
-    let score = 0.5; // base
+    let score = 0.5;
     const multiSource = i.source.length > 1;
     if (multiSource) score += 0.10;
     if (fromTrending.has(i.query)) score += 0.10;
@@ -298,11 +298,9 @@ export function deterministicProcess(
     return { ...i, score, reason };
   });
 
-  // Sort by score desc then by query length asc; clamp 12
   itemsScored.sort((a, b) => (b.score - a.score) || (a.query.length - b.query.length));
   const final = itemsScored.slice(0, 12);
 
-  // sourceCounts
   const sourceCounts: Record<string, number> = {};
   for (const i of final) {
     for (const s of i.source) sourceCounts[s] = (sourceCounts[s] ?? 0) + 1;
@@ -311,42 +309,25 @@ export function deterministicProcess(
   return { items: final, sourceCounts };
 }
 
-// --- Firestore artifact helpers ---------------------------------------------
-
 async function getExistingArtifact(runId: string) {
-  const ref = db.doc(`runs/${runId}`);
+  const ref = db.collection("runs").doc(runId).collection("artifacts").doc("round0");
   const snap = await ref.get();
-  const data = snap.exists ? snap.data() : undefined;
-  const art = data?.artifacts?.round0;
-  return art ? { ...art } : null;
+  return snap.exists ? snap.data() : null;
 }
 
 async function writeArtifact(runId: string, payload: any) {
-  const ref = db.doc(`runs/${runId}`);
-  await ref.set(
-    {
-      artifacts: {
-        round0: {
-          ...payload,
-          createdAt: FieldValue.serverTimestamp(),
-        },
-      },
-    },
-    { merge: true }
-  );
+  const ref = db.collection("runs").doc(runId).collection("artifacts").doc("round0");
+  await ref.set({
+    ...payload,
+    createdAt: FieldValue.serverTimestamp(),
+  });
 }
 
-// --- Main callable -----------------------------------------------------------
-
-export const round0_trends = onCall(
-  { timeoutSeconds: 300, memory: "256MiB" },
-  async (req) => {
+export async function runR0_Trends(input: Round0Input) {
     const t0 = Date.now();
-    const input = req.data;
     assertInput(input);
     const { runId, seeds, region, useLLM, force } = input;
 
-    // Idempotency
     if (!force) {
       const existing = await getExistingArtifact(runId);
       if (existing) {
@@ -356,20 +337,15 @@ export const round0_trends = onCall(
     }
 
     const tSerp = Date.now();
-
-    // --- Gather sources (Serp + RSS fallback) --------------------------------
     const buckets: SourceBucket[] = [];
-
-    // SerpApi (if available)
     let usedSerp = false;
     let serpCacheHit = false;
 
     if (serpAvailable()) {
       usedSerp = true;
-      const dayBucket = new Date().toISOString().slice(0, 10); // YYYY-MM-DD for cache key
+      const dayBucket = new Date().toISOString().slice(0, 10);
       const baseKey = JSON.stringify({ seeds, region, day: dayBucket });
 
-      // Autocomplete
       {
         const cacheKey = `serpapi:${sha256(baseKey + ":autocomplete")}`;
         const cached = await getCache(cacheKey);
@@ -383,7 +359,6 @@ export const round0_trends = onCall(
         }
         buckets.push({ type: "autocomplete", sourceName: "serp:autocomplete", items: list });
       }
-      // Related
       {
         const cacheKey = `serpapi:${sha256(baseKey + ":related")}`;
         const cached = await getCache(cacheKey);
@@ -397,7 +372,6 @@ export const round0_trends = onCall(
         }
         buckets.push({ type: "related", sourceName: "serp:related", items: list });
       }
-      // Trending
       {
         const cacheKey = `serpapi:${sha256(baseKey + ":trending")}`;
         const cached = await getCache(cacheKey);
@@ -413,7 +387,6 @@ export const round0_trends = onCall(
       }
     }
 
-    // RSS fallback (always included, but especially useful if Serp is unavailable)
     const tRss = Date.now();
     for (const src of RSS_SOURCES) {
       try {
@@ -425,17 +398,14 @@ export const round0_trends = onCall(
     }
     logStep(runId, "fetch-sources", tSerp);
 
-    // --- Deterministic normalization/dedup/score ------------------------------
     const tDet = Date.now();
     const { items: detItems, sourceCounts } = deterministicProcess(buckets);
     logStep(runId, "deterministic", tDet);
 
-    // --- Optional LLM prune/boost --------------------------------------------
     const tLlm = Date.now();
     const finalItems = await optionalLlmPrune(detItems, useLLM);
     logStep(runId, "optional-llm", tLlm);
 
-    // --- Output validation (simple) ------------------------------------------
     for (const i of finalItems) {
       if (!i.query || typeof i.query !== "string") throw new HttpsError("internal", "Invalid item.query");
       if (!["autocomplete", "related", "trending", "rss"].includes(i.type)) {
@@ -450,7 +420,6 @@ export const round0_trends = onCall(
       }
     }
 
-    // --- Write artifact -------------------------------------------------------
     const artifact = {
       items: finalItems,
       cached: serpCacheHit,
@@ -460,10 +429,13 @@ export const round0_trends = onCall(
 
     logStep(runId, "done", t0);
     return artifact;
-  }
+}
+
+export const Round0_Trends = onCall(
+  { timeoutSeconds: 300, memory: "256MiB" },
+  (req) => runR0_Trends(req.data)
 );
 
-// Export internals for unit testing
 export const _test = {
   normalizeQuery,
   shouldDrop,

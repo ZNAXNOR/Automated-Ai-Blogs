@@ -1,187 +1,321 @@
 /**
-* Generates long-form drafts from outlines and stores them in Firestore.
-* Designed for dependency injection so tests can mock Firestore and the text generator.
-*/
-import { env } from "../utils/config";
+ * Round 3: Draft Generation
+ *
+ * This round fetches outlines from Round 2, generates a draft for each using an LLM,
+ * validates the output, and saves the drafts to Firestore.
+ *
+ * Key Improvements:
+ * - Separation of I/O (fetch/save) from core logic (draft generation).
+ * - Parallel draft generation with concurrency limiting.
+ * - Stricter validation of both input (outlines) and output (drafts).
+ * - Robust retry mechanism for LLM calls to handle word count issues.
+ * - Enhanced logging for better traceability.
+ * - Improved testability by exporting key functions.
+ */
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import fetch from "node-fetch";
+import pLimit from "p-limit";
+import { env } from "../utils/config";
 
-export type OutlineItem = {
-    trend: string;
-    idea: string;
-    outline: string;
-    // optional id from previous rounds
-    id?: string;
-};
+// --- 1. DATA MODELS ---
 
-
-export type DraftDocument = {
-    trend: string;
-    idea: string;
-    outline: string;
-    draft: string;
-    metadata: {
-        wordCount: number;
-        createdAt: number; // epoch ms
-    };
-}; 
-
-
-/** Count words in a text (simple whitespace split). */
-export function wordCount(text: string): number {
-    if (!text) return 0;
-    // collapse whitespace and split
-    return text.trim().split(/\s+/).filter(Boolean).length;
+// Input from Round 2
+export interface OutlineSection {
+  heading: string;
+  bullets: string[];
+  estWordCount: number;
 }
 
-
-/**
-* Default text generator using fetch -> Hugging Face or any remote LLM endpoint.
-*/
-export async function callHuggingFace(prompt: string): Promise<string> {
-    const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR3}`;
-
-    const response = await fetch(HF_API_URL, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${env.HF_API_KEY}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            inputs: prompt,
-            parameters: {
-                max_new_tokens: 1024,
-                temperature: 0.7,
-            },
-        }),
-    });
-
-    if (!response.ok) {
-        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as any;
-
-    let text: string;
-    if (Array.isArray(data) && data.length > 0 && data[0].generated_text) {
-        text = data[0].generated_text;
-    } else if (typeof data === "object" && data.generated_text) {
-        text = data.generated_text;
-    } else {
-        text = JSON.stringify(data);
-    }
-    // The model sometimes includes the prompt in the response, so we need to remove it.
-    if (text.startsWith(prompt)) {
-        text = text.substring(prompt.length);
-    }
-
-    return text.trim();
+export interface R2OutlineItem {
+  trend: string;
+  idea: string;
+  sections: OutlineSection[];
 }
 
+// Output for Round 3
+export interface DraftDocument {
+  runId: string;
+  trend: string;
+  idea: string;
+  outline: string; // The text version of the R2 outline
+  draft: string;
+  wordCount: number;
+  metadata: {
+    createdAt: number; // epoch ms
+    retries: number;
+    promptWordCount: number;
+  };
+}
+
+// --- 2. CONFIGURATION ---
+const MAX_DRAFT_RETRIES = 2; // Total attempts = 1 initial + 2 retries = 3
+const MIN_DRAFT_WORDS = 250;
+const MAX_DRAFT_WORDS = 2000;
+const CONCURRENCY = 4; // Max parallel LLM requests
+
+// --- 3. I/O OPERATIONS ---
 
 /**
-* Generate a draft for a single outline. Ensures draft meets min/max word constraints.
-* The generator function should accept a prompt and return generated text.
-*/
+ * Fetches and validates the Round 2 artifact from Firestore.
+ */
+export async function fetchR2Data(runId: string): Promise<R2OutlineItem[]> {
+  console.log(`R3: Fetching R2 data for runId=${runId}`);
+  const db = getFirestore();
+  const r2Snap = await db.doc(`runs/${runId}/artifacts/round2`).get();
+
+  if (!r2Snap.exists) {
+    throw new Error(`R2 artifact not found for runId=${runId}`);
+  }
+
+  const items = r2Snap.data()?.items as R2OutlineItem[];
+  validateR2Outlines(items);
+
+  console.log(`R3: Fetched and validated ${items.length} outlines from R2.`);
+  return items;
+}
+
+/**
+ * Saves the generated drafts for Round 3 to a single artifact in Firestore.
+ */
+export async function saveR3Drafts(
+  runId: string,
+  drafts: DraftDocument[]
+): Promise<void> {
+  if (drafts.length === 0) {
+    console.log("R3: No drafts to save.");
+    return;
+  }
+  console.log(`R3: Saving ${drafts.length} drafts to Firestore for runId=${runId}`);
+  const db = getFirestore();
+  await db.doc(`runs/${runId}/artifacts/round3`).set({
+    items: drafts,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  console.log("R3: Successfully saved drafts.");
+}
+
+// --- 4. CORE LOGIC ---
+
+/**
+ * Generates a draft for a single outline with validation and retry logic.
+ */
 export async function generateDraftForOutline(
-    item: OutlineItem,
-    generator: (prompt: string) => Promise<string> = callHuggingFace,
-    opts?: { minWords?: number; maxWords?: number }
+  item: R2OutlineItem,
+  runId: string,
+  generator: (prompt: string) => Promise<string> = callHuggingFace
 ): Promise<DraftDocument> {
-    const minWords = opts?.minWords ?? 250;
-    const maxWords = opts?.maxWords ?? 2000;
+  const outlineString = convertOutlineToString(item);
+  const prompt = buildPrompt(item, outlineString);
 
+  let draft = "";
+  let finalWordCount = 0;
+  let retries = 0;
 
-    if (!item.outline || !item.idea || !item.trend) {
-        throw new Error('Outline item must contain trend, idea, and outline.');
+  for (let attempt = 0; attempt <= MAX_DRAFT_RETRIES; attempt++) {
+    retries = attempt;
+    const rawDraft = await generator(prompt);
+    
+    // Sanitize the response: LLMs sometimes include the prompt.
+    draft = sanitizeDraft(rawDraft, prompt);
+    finalWordCount = wordCount(draft);
+
+    if (finalWordCount >= MIN_DRAFT_WORDS && finalWordCount <= MAX_DRAFT_WORDS) {
+      break; // Word count is within the valid range
     }
 
+    console.warn(
+      `R3: Draft for "${item.idea}" (attempt ${attempt + 1}) did not meet word count requirements ` +
+      `(${finalWordCount} words). Retrying...`
+    );
+  }
 
-    const basePrompt = `Write a long-form, engaging, coherent draft based on the following outline. Aim for between ${minWords} and ${maxWords} words, prefer closer to the upper half but not exceeding ${maxWords}. Make the content useful and avoid empty output.\n\nTRENDS: ${item.trend}\nIDEA: ${item.idea}\nOUTLINE:\n${item.outline}\n\nDraft:`;
+  // Final check after all retries
+  if (finalWordCount < MIN_DRAFT_WORDS || finalWordCount > MAX_DRAFT_WORDS) {
+    throw new Error(
+      `Generated draft word count (${finalWordCount}) is outside the range ` +
+      `${MIN_DRAFT_WORDS}-${MAX_DRAFT_WORDS} after ${MAX_DRAFT_RETRIES} retries.`
+    );
+  }
 
+  const draftDoc: DraftDocument = {
+    runId,
+    trend: item.trend,
+    idea: item.idea,
+    outline: outlineString,
+    draft,
+    wordCount: finalWordCount,
+    metadata: {
+      createdAt: Date.now(),
+      retries,
+      promptWordCount: wordCount(prompt),
+    },
+  };
 
-    let draft = await generator(basePrompt);
-
-
-    // sanitize
-    draft = (draft ?? '').trim();
-    if (!draft) throw new Error('Generator returned empty draft.');
-
-
-    const doc: DraftDocument = {
-        trend: item.trend,
-        idea: item.idea,
-        outline: item.outline,
-        draft,
-        metadata: {
-            wordCount: wordCount(draft),
-            createdAt: Date.now(),
-        },
-    };
-
-
-    // final validation
-    if (doc.metadata.wordCount < minWords || doc.metadata.wordCount > maxWords) {
-        // simple retry once for now
-        draft = await generator(basePrompt);
-        draft = (draft ?? '').trim();
-        doc.draft = draft;
-        doc.metadata.wordCount = wordCount(draft);
-    }
-
-
-    // if still invalid, throw
-    if (doc.metadata.wordCount < minWords || doc.metadata.wordCount > maxWords) {
-        throw new Error(`Generated draft word count (${doc.metadata.wordCount}) is outside the range ${minWords}-${maxWords}.`);
-    }
-
-
-    return doc;
+  validateDraftDocument(draftDoc);
+  return draftDoc;
 }
 
+// --- 5. API & UTILITY FUNCTIONS ---
 
 /**
-* Process a batch of outlines, generating a draft for each.
-* This is the main orchestrator for the drafting round.
-* It uses a Firestore-like DB interface for storing results.
-*/
-export async function processOutlines(
-    outlines: OutlineItem[],
-    db: { collection: (name: string) => { add: (doc: any) => Promise<any> } },
-    generator: (prompt: string) => Promise<string> = callHuggingFace,
-    opts?: {
-        minWords?: number;
-        maxWords?: number;
-        maxTotalDrafts?: number;
-    }
-): Promise<DraftDocument[]> {
-    const results: DraftDocument[] = [];
-    let draftsCount = 0;
-    const maxTotalDrafts = opts?.maxTotalDrafts ?? 1000; // safety cap
+ * Makes a single call to the Hugging Face Inference API.
+ */
+export async function callHuggingFace(prompt: string): Promise<string> {
+  const apiKey = env.hfToken;
+  const modelId = env.hfModelR3;
 
+  if (!apiKey || !modelId) {
+    throw new Error("Hugging Face API key or model for R3 is not set in environment variables.");
+  }
 
-    for (const item of outlines) {
-        if (draftsCount >= maxTotalDrafts) {
-            console.log(`Total drafts limit (${maxTotalDrafts}) reached.`);
-            break;
-        }
+  const response = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      inputs: prompt,
+      parameters: { max_new_tokens: 2048, temperature: 0.8 },
+    }),
+  });
 
+  if (!response.ok) {
+    const errorBody = await response.text();
+    throw new Error(`Hugging Face R3 API Error: ${response.status} ${response.statusText} - ${errorBody}`);
+  }
 
-        try {
-            const draftDoc = await generateDraftForOutline(item, generator, opts);
+  const data = (await response.json()) as any;
+  const generatedText = data?.[0]?.generated_text;
 
+  if (typeof generatedText !== "string") {
+    throw new Error("Invalid or missing \'generated_text\' in response from Hugging Face R3 API.");
+  }
 
-            // store in Firestore
-            await db.collection('r3_drafts').add(draftDoc);
-
-
-            results.push(draftDoc);
-            draftsCount++;
-        } catch (error) {
-            console.error(`Error processing outline for trend "${item.trend}":`, error);
-            // continue to next item
-        }
-    }
-
-
-    return results;
+  return generatedText;
 }
+
+/** Simple word counter. */
+export function wordCount(text: string): number {
+  return text ? text.trim().split(/\s+/).filter(Boolean).length : 0;
+}
+
+/** Removes the prompt from the start of the draft, if present. */
+export function sanitizeDraft(draft: string, prompt: string): string {
+  // Trim both to handle leading/trailing whitespace inconsistencies
+  const trimmedDraft = draft.trim();
+  const trimmedPrompt = prompt.trim();
+  if (trimmedDraft.startsWith(trimmedPrompt)) {
+    return trimmedDraft.substring(trimmedPrompt.length).trim();
+  }
+  return trimmedDraft;
+}
+
+// --- 6. VALIDATION & PROMPT ENGINEERING ---
+
+/** Validates the structure of the R2 outlines. */
+export function validateR2Outlines(items: any): void {
+  if (!Array.isArray(items) || items.length === 0) {
+    throw new Error("R2 artifact has no \'items\' array or is empty.");
+  }
+  for (const item of items) {
+    if (!item.trend || !item.idea || !Array.isArray(item.sections) || item.sections.length === 0) {
+      throw new Error(`Invalid R2 OutlineItem: missing fields or empty sections. Item: ${JSON.stringify(item)}`);
+    }
+    for (const section of item.sections) {
+      if (!section.heading || !Array.isArray(section.bullets)) {
+        throw new Error(`Invalid section in outline for trend "${item.trend}". Section: ${JSON.stringify(section)}`);
+      }
+    }
+  }
+}
+
+/** Validates the final generated DraftDocument. */
+function validateDraftDocument(doc: DraftDocument): void {
+  if (!doc.draft || doc.wordCount <= 0) {
+    throw new Error(`Invalid draft generated for trend "${doc.trend}": empty draft or zero word count.`);
+  }
+  if (!doc.metadata.createdAt) {
+    throw new Error(`Invalid draft generated for trend "${doc.trend}": missing createdAt timestamp.`);
+  }
+}
+
+/** Converts a structured outline into a string for the prompt. */
+export function convertOutlineToString(item: R2OutlineItem): string {
+  return item.sections
+    .map(s => `## ${s.heading}\n${s.bullets.map(b => `- ${b}`).join("\n")}`)
+    .join("\n\n");
+}
+
+/** Constructs the prompt for the language model. */
+export function buildPrompt(item: R2OutlineItem, outlineString: string): string {
+  return `Write a long-form, engaging, coherent draft based on the following outline. Aim for between ${MIN_DRAFT_WORDS} and ${MAX_DRAFT_WORDS} words. Make the content useful and avoid empty output.
+
+TREND: ${item.trend}
+IDEA: ${item.idea}
+OUTLINE:
+${outlineString}
+
+DRAFT:`;
+}
+
+// --- 7. MAIN ORCHESTRATION FUNCTION ---
+
+/**
+ * Main function for Round 3: generates drafts from R2 outlines in parallel.
+ */
+export async function Round3_Draft(
+  runId: string
+): Promise<{ draftsCreated: number; failures: number }> {
+  try {
+    console.log(`Starting Round 3: Draft Generation for runId=${runId}`);
+    const outlines = await fetchR2Data(runId);
+
+    const limit = pLimit(CONCURRENCY);
+    let successes = 0;
+    let failures = 0;
+
+    const promises = outlines.map(outline =>
+      limit(async () => {
+        try {
+          const draft = await generateDraftForOutline(outline, runId);
+          successes++;
+          return draft;
+        } catch (error: any) {
+          console.error(
+            `R3: Failed to generate draft for idea "${outline.idea}" in runId=${runId}:`,
+            error.message
+          );
+          failures++;
+          return null; // Indicate failure
+        }
+      })
+    );
+
+    const results = await Promise.all(promises);
+    const successfulDrafts = results.filter((d): d is DraftDocument => d !== null);
+
+    await saveR3Drafts(runId, successfulDrafts);
+
+    console.log(
+      `Round 3 finished for runId=${runId}. ` +
+      `Successes: ${successes}, Failures: ${failures}`
+    );
+
+    return { draftsCreated: successes, failures };
+  } catch (err: any) {
+    console.error(`Critical error in Round 3 for runId=${runId}:`, err.message);
+    throw err; // Re-throw for the top-level handler
+  }
+}
+
+// --- 8. EXPORTS FOR TESTING ---
+export const _test = {
+  buildPrompt,
+  callHuggingFace,
+  convertOutlineToString,
+  generateDraftForOutline,
+  sanitizeDraft,
+  validateR2Outlines,
+  wordCount,
+};

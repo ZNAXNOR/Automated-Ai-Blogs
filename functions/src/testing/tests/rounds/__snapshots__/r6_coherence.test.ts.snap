@@ -1,0 +1,9 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`r6_coherence Core Functionality & Firestore Writes should calculate coherence, save to Firestore, and match snapshot 1`] = `
+{
+  "coherenceScore": 0.8500000000000001,
+  "createdAt": Any<String>,
+  "draftId": "test-draft-123",
+}
+`;

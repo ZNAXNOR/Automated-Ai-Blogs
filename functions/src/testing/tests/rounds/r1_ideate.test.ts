@@ -10,7 +10,7 @@
  *   - Max cap of 60 ideas enforced
  */
 
-import { runRound1, IdeationItem } from "../../../rounds/r1_ideate";
+import { Round1_Ideate as runRound1, IdeationItem } from "../../../rounds/r1_ideate";
 import admin from "firebase-admin";
 import fetch, { Response } from "node-fetch";
 
@@ -117,7 +117,33 @@ describe("r1_ideation runRound1", () => {
       expect(item.variant).toBeLessThanOrEqual(5);
       expect(item.source).toBe("llm");
     }
-  }, 20000);
+
+    // 1. Validate Firestore structure more deeply
+    expect(docMock).toHaveBeenCalledWith("test-run");
+    expect(docMock).toHaveBeenCalledWith("round1");
+    expect(setMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        items: expect.any(Array),
+        createdAt: "MOCK_SERVER_TIMESTAMP",
+      })
+    );
+
+    // 2. Check variant numbering continuity
+    const grouped = items.reduce(
+      (acc, item) => {
+        acc[item.trend] = acc[item.trend] || [];
+        acc[item.trend].push(item.variant);
+        return acc;
+      },
+      {} as Record<string, number[]>
+    );
+
+    for (const trend in grouped) {
+      expect(grouped[trend]).toEqual(expect.arrayContaining([1]));
+      const sorted = grouped[trend].sort((a, b) => a - b);
+      expect(sorted).toEqual(Array.from({ length: sorted.length }, (_, i) => i + 1));
+    }
+  }, 5000);
 
   test("throws if Round0 artifact not found", async () => {
     getMock.mockResolvedValue({ exists: false });

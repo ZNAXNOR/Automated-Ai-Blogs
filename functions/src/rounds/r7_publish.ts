@@ -1,7 +1,7 @@
 // src/rounds/r7_publish.ts
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { httpClient } from "../clients/http";
-
+import { env } from "../utils/config";
 
 type Round6Doc = {
   trendId: string;
@@ -10,43 +10,47 @@ type Round6Doc = {
     title: string;
     description: string;
     tags: string[];
+    version?: number;
   };
 };
 
 type Round7Record = {
   trendId: string;
   wpPostId?: number;
-  status: "draft" | "error";
+  status: "draft" | "error" | "skipped";
   errorMessage?: string;
   publishedAt?: string;
+  createdAt: Timestamp;
 };
 
-const WP_SITE = process.env.WP_SITE;
-const WP_USER = process.env.WP_USER;
-const WP_APP_PASSWORD = process.env.WP_APP_PASSWORD;
+const { wpApiUrl, wpUsername, wpPassword } = env;
 
 function buildAuthHeader() {
-  const creds = `${WP_USER}:${WP_APP_PASSWORD}`;
+  const creds = `${wpUsername}:${wpPassword}`;
   return `Basic ${Buffer.from(creds).toString("base64")}`;
 }
 
 async function resolveExistingTagIds(tagNames: string[]): Promise<number[]> {
   if (!tagNames?.length) return [];
   const ids: number[] = [];
-  for (const t of tagNames) {
+  const tagPromises = tagNames.map(async (t) => {
     try {
       const resp = await httpClient.request({
         method: "GET",
-        url: `https://${WP_SITE}/wp-json/wp/v2/tags?search=${encodeURIComponent(t)}&per_page=1`,
+        url: `${wpApiUrl}/tags?search=${encodeURIComponent(t)}&per_page=1`,
         headers: { Authorization: buildAuthHeader() },
       });
       const data = resp.data;
-      if (Array.isArray(data) && data[0]?.id) ids.push(Number(data[0].id));
-    } catch {
-      // skip silently
+      if (Array.isArray(data) && data[0]?.id) return Number(data[0].id);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.warn(`Failed to resolve tag ID for "${t}":`, errorMessage);
     }
-  }
-  return ids;
+    return null;
+  });
+
+  const results = await Promise.all(tagPromises);
+  return results.filter((id): id is number => id !== null);
 }
 
 async function publishToWP({
@@ -59,10 +63,10 @@ async function publishToWP({
   content: string;
   excerpt: string;
   tags: number[];
-}) {
+}): Promise<number> {
   const resp = await httpClient.request({
     method: "POST",
-    url: `https://${WP_SITE}/wp-json/wp/v2/posts`,
+    url: `${wpApiUrl}/posts`,
     headers: {
       Authorization: buildAuthHeader(),
       "Content-Type": "application/json",
@@ -75,29 +79,52 @@ async function publishToWP({
       ...(tags?.length ? { tags } : {}),
     },
   });
-  const data = resp.data;
-  if (!data?.id) throw new Error("WP response missing id");
-  return Number(data.id);
+  if (resp.status !== 201 || !resp.data?.id) {
+    throw new Error(
+      `Failed to create post in WordPress. Status: ${resp.status}, Body: ${JSON.stringify(resp.data)}`
+    );
+  }
+  return Number(resp.data.id);
 }
 
-export async function runRound7Publish() {
+export async function Round7_Publish(runId: string) {
+  if (!runId) throw new Error("runId is required");
+
   const db = getFirestore();
-  const r6 = await db.collection("round6_coherence").get();
-  const r7 = db.collection("round7_publish");
+  const r6Collection = db.collection(`runs/${runId}/artifacts/round6`);
+  const r7Collection = db.collection(`runs/${runId}/artifacts/round7`);
+
+  const existingR7Docs = await r7Collection.get();
+  const publishedTrendIds = new Set(existingR7Docs.docs.map((d) => d.data().trendId));
+
+  const r6Docs = await r6Collection.get();
 
   let processed = 0,
     skipped = 0,
     succeeded = 0,
     failed = 0;
 
-  for (const doc of r6.docs) {
-    const d = doc.data() as Round6Doc;
-    processed++;
+  const batch = db.batch();
 
-    const exists = await r7.where("trendId", "==", d.trendId).limit(1).get();
-    if (!exists.empty) {
+  const publishPromises = r6Docs.docs.map(async (doc) => {
+    processed++;
+    const d = doc.data() as Round6Doc;
+
+    if (publishedTrendIds.has(d.trendId)) {
       skipped++;
-      continue;
+      return;
+    }
+
+    if (!d.metadata?.title || !d.validatedText) {
+        failed++;
+        const newR7Ref = r7Collection.doc();
+        batch.set(newR7Ref, {
+            trendId: d.trendId,
+            status: 'error',
+            errorMessage: 'Missing title or content',
+            createdAt: Timestamp.now(),
+        });
+        return;
     }
 
     try {
@@ -108,22 +135,35 @@ export async function runRound7Publish() {
         excerpt: d.metadata.description,
         tags: tagIds,
       });
-      await r7.add({
+
+      const newR7Ref = r7Collection.doc();
+      batch.set(newR7Ref, {
         trendId: d.trendId,
-        wpPostId: wpId,
         status: "draft",
-        publishedAt: new Date().toISOString(),
-      } as Round7Record);
+        wpPostId: wpId,
+        publishedAt: Timestamp.now().toDate().toISOString(),
+        createdAt: Timestamp.now(),
+      });
+
       succeeded++;
-    } catch (err: any) {
-      await r7.add({
-        trendId: d.trendId,
-        status: "error",
-        errorMessage: err.message ?? String(err),
-      } as Round7Record);
+    } catch (err: unknown) {
       failed++;
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`Failed to publish trendId ${d.trendId}:`, errorMessage);
+
+      const newR7Ref = r7Collection.doc();
+      batch.set(newR7Ref, {
+          trendId: d.trendId,
+          status: 'error',
+          errorMessage,
+          createdAt: Timestamp.now(),
+      });
     }
-  }
+  });
+
+  await Promise.allSettled(publishPromises);
+
+  await batch.commit();
 
   return { processed, skipped, succeeded, failed };
 }

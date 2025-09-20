@@ -1,0 +1,48 @@
+[debug] [2025-09-20T05:07:59.432Z] ----------------------------------------------------------------------
+[debug] [2025-09-20T05:07:59.435Z] Command:       /nix/store/ws50yvm6vzlzf7jzz6n7xh4szddrack1-nodejs-20.19.1/bin/node /nix/store/wma3rvxxva78rqvnpja82nx5b3mclpxg-firebase-tools-14.15.2/lib/node_modules/firebase-tools/lib/bin/firebase.js functions:secrets:set WP_USERNAME
+[debug] [2025-09-20T05:07:59.435Z] CLI Version:   14.15.2
+[debug] [2025-09-20T05:07:59.436Z] Platform:      linux
+[debug] [2025-09-20T05:07:59.436Z] Node Version:  v20.19.1
+[debug] [2025-09-20T05:07:59.436Z] Time:          Sat Sep 20 2025 05:07:59 GMT+0000 (Coordinated Universal Time)
+[debug] [2025-09-20T05:07:59.436Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2025-09-20T05:07:59.439Z] >>> [apiv2][query] GET https://firebase-public.firebaseio.com/cli.json [none]
+[debug] [2025-09-20T05:07:59.487Z] No OAuth tokens found
+[debug] [2025-09-20T05:07:59.488Z] No OAuth tokens found
+[error] Failed to fetch Firebase Project from current Studio Workspace: Unable to refresh auth: not yet authenticated.
+[debug] [2025-09-20T05:07:59.494Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2025-09-20T05:07:59.835Z] <<< [apiv2][status] GET https://firebase-public.firebaseio.com/cli.json 200
+[debug] [2025-09-20T05:07:59.835Z] <<< [apiv2][body] GET https://firebase-public.firebaseio.com/cli.json {"cloudBuildErrorAfter":1594252800000,"cloudBuildWarnAfter":1590019200000,"defaultNode10After":1594252800000,"minVersion":"3.0.5","node8DeploysDisabledAfter":1613390400000,"node8RuntimeDisabledAfter":1615809600000,"node8WarnAfter":1600128000000}
+[debug] [2025-09-20T05:08:22.142Z] Running auto auth
+[debug] [2025-09-20T05:08:22.164Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:22.165Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/secretmanager.googleapis.com [none]
+[debug] [2025-09-20T05:08:22.165Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/secretmanager.googleapis.com x-goog-quota-user=projects/blogwebsite-2004
+[debug] [2025-09-20T05:08:23.192Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/secretmanager.googleapis.com 200
+[debug] [2025-09-20T05:08:23.192Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/secretmanager.googleapis.com [omitted]
+[debug] [2025-09-20T05:08:23.201Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform","https://www.googleapis.com/auth/userinfo.email"]
+[debug] [2025-09-20T05:08:23.202Z] > authorizing via signed-in user (omkarsdalvi1@gmail.com)
+[debug] [2025-09-20T05:08:23.202Z] [iam] checking project blogwebsite-2004 for permissions ["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]
+[debug] [2025-09-20T05:08:23.203Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:23.203Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004:testIamPermissions [none]
+[debug] [2025-09-20T05:08:23.203Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004:testIamPermissions x-goog-quota-user=projects/blogwebsite-2004
+[debug] [2025-09-20T05:08:23.203Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2025-09-20T05:08:23.965Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004:testIamPermissions 200
+[debug] [2025-09-20T05:08:23.965Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004:testIamPermissions {"permissions":["firebase.projects.get","secretmanager.secrets.create","secretmanager.secrets.get","secretmanager.secrets.update","secretmanager.versions.add"]}
+[debug] [2025-09-20T05:08:23.967Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:23.967Z] >>> [apiv2][query] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/cloudresourcemanager.googleapis.com [none]
+[debug] [2025-09-20T05:08:23.967Z] >>> [apiv2][(partial)header] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/cloudresourcemanager.googleapis.com x-goog-quota-user=projects/blogwebsite-2004
+[debug] [2025-09-20T05:08:24.221Z] <<< [apiv2][status] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/cloudresourcemanager.googleapis.com 200
+[debug] [2025-09-20T05:08:24.221Z] <<< [apiv2][body] GET https://serviceusage.googleapis.com/v1/projects/blogwebsite-2004/services/cloudresourcemanager.googleapis.com [omitted]
+[debug] [2025-09-20T05:08:24.229Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:24.229Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004 [none]
+[debug] [2025-09-20T05:08:24.430Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004 200
+[debug] [2025-09-20T05:08:24.430Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/blogwebsite-2004 {"projectNumber":"523954013072","projectId":"blogwebsite-2004","lifecycleState":"ACTIVE","name":"BlogWebsite","labels":{"firebase":"enabled","firebase-core":"disabled","generative-language":"enabled"},"createTime":"2025-01-03T07:41:04.967194Z"}
+[debug] [2025-09-20T05:08:24.432Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:24.432Z] >>> [apiv2][query] GET https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets/WP_USERNAME [none]
+[debug] [2025-09-20T05:08:24.652Z] <<< [apiv2][status] GET https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets/WP_USERNAME 404
+[debug] [2025-09-20T05:08:24.652Z] <<< [apiv2][body] GET https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets/WP_USERNAME {"error":{"code":404,"message":"Secret [projects/523954013072/secrets/WP_USERNAME] not found.","status":"NOT_FOUND"}}
+[debug] [2025-09-20T05:08:24.655Z] No OAuth tokens found
+[debug] [2025-09-20T05:08:24.655Z] >>> [apiv2][query] POST https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets secretId=WP_USERNAME
+[debug] [2025-09-20T05:08:24.656Z] >>> [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets {"name":"WP_USERNAME","replication":{"automatic":{}},"labels":{"firebase-managed":"functions"}}
+[debug] [2025-09-20T05:08:25.382Z] <<< [apiv2][status] POST https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets 200
+[debug] [2025-09-20T05:08:25.383Z] <<< [apiv2][body] POST https://secretmanager.googleapis.com/v1/projects/blogwebsite-2004/secrets {"name":"projects/523954013072/secrets/WP_USERNAME","replication":{"automatic":{}},"createTime":"2025-09-20T05:08:24.736265Z","labels":{"firebase-managed":"functions"},"etag":"\"163f34937900de\""}

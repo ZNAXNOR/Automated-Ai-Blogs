@@ -1,0 +1,27 @@
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
+
+exports[`R4 → R5 Pairwise Metadata Generation generates metadata for a single polished draft and matches snapshot 1`] = `
+{
+  "categories": [
+    "Marketing",
+    "Technology",
+  ],
+  "excerpt": "This is a detailed exploration into how artificial intelligence is fundamentally changing the marketing landscape. We cover everything from personalized content creation and automated campaign management to the ethical challenges that arise. Our guide provides practical, actionable advice for businesses looking to integrate AI into their workflows, ensuring they can leverage these powerful tools to connect with audiences more effectively and achieve a higher return on investment in a competitive digital world.",
+  "imageSuggestions": [
+    "prompt: AI robot creating content",
+    "reuse: company logo",
+  ],
+  "metaDescription": "Learn how AI is reshaping content creation and marketing workflows.",
+  "relatedKeywords": [
+    "AI in marketing",
+    "content automation",
+    "AI marketing tools",
+  ],
+  "seoTitle": "AI Marketing Trends: 2025 Guide",
+  "tags": [
+    "AI",
+    "Marketing",
+    "Content Automation",
+  ],
+}
+`;
