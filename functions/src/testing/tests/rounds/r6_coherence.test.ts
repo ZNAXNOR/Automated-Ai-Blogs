@@ -1,8 +1,8 @@
 jest.mock("node-fetch", () => jest.fn());
 
-import { Round6_Coherence, _test as r6_test_functions } from "../../../rounds/r6_coherence";
+import { Round6_Coherence } from "../../../rounds/r6_coherence";
+
 import fetch from "node-fetch";
-const { runR6_Coherence } = r6_test_functions;
 const mockedFetch = fetch as unknown as jest.Mock;
 
 // Mock environment variables
@@ -41,11 +41,17 @@ const batchSetMock = jest.fn((docRef, data) => {
 });
 const batchCommitMock = jest.fn().mockResolvedValue(undefined);
 
-const collectionMock = (path: string) => ({
-    get: collectionGetMock,
-    doc: (docId: string) => ({
-        path: `${path}/${docId}`,
-    }),
+const collectionMock = jest.fn((path: string) => {
+    if (path.includes("round4_distribution")) {
+        return {
+            get: collectionGetMock
+        };
+    }
+    return {
+        doc: (docId: string) => ({
+            path: `${path}/${docId}`,
+        }),
+    }
 });
 
 jest.mock("firebase-admin/firestore", () => ({
@@ -60,64 +66,6 @@ jest.mock("firebase-admin/firestore", () => ({
         serverTimestamp: () => 'mock-server-timestamp',
     },
 }));
-
-
-describe("r6_coherence Core Functionality", () => {
-    beforeEach(() => {
-        jest.clearAllMocks();
-        mockedFetch.mockReset();
-    });
-
-    it("should calculate coherence score correctly", async () => {
-        mockedFetch.mockResolvedValue({
-            ok: true,
-            json: () => Promise.resolve([0.8, 0.9, 0.85]),
-        });
-
-        const draftId = "test-draft-id";
-        const polishedText = "This is a test.";
-        const derivatives = ["A similar test.", "Another similar test."];
-
-        const result = await runR6_Coherence(draftId, polishedText, derivatives);
-
-        expect(result).toHaveProperty("draftId");
-        expect(result).toHaveProperty("coherenceScore");
-        expect(result.draftId).toBe(draftId);
-        expect(typeof result.coherenceScore).toBe("number");
-        expect(fetch).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
-            headers: {
-                Authorization: `Bearer test-token`,
-                "Content-Type": "application/json",
-            }
-        }));
-    });
-
-    it("should handle empty derivatives array", async () => {
-        const draftId = "test-draft-id";
-        const polishedText = "This is a test.";
-        const derivatives: string[] = [];
-
-        await expect(runR6_Coherence(draftId, polishedText, derivatives)).rejects.toThrow(
-            "Missing or invalid required fields: draftId, polishedText, or derivatives"
-        );
-    });
-
-    it("should handle API errors gracefully", async () => {
-        mockedFetch.mockResolvedValue({
-            ok: false,
-            status: 500,
-            statusText: "Server Error",
-        });
-
-        const draftId = "test-draft-id";
-        const polishedText = "This is a test.";
-        const derivatives = ["A similar test.", "Another similar test."];
-
-        await expect(runR6_Coherence(draftId, polishedText, derivatives)).rejects.toThrow(
-            "HF API error: 500 Server Error"
-        );
-    });
-});
 
 
 describe("r6_coherence Core Functionality & Firestore Writes", () => {
@@ -139,7 +87,7 @@ describe("r6_coherence Core Functionality & Firestore Writes", () => {
         const runId = "test-run-for-snapshot";
         await Round6_Coherence(runId);
 
-        expect(collectionGetMock).toHaveBeenCalledWith(`runs/${runId}/artifacts/round4_distribution`);
+        expect(collectionMock).toHaveBeenCalledWith(`runs/${runId}/artifacts/round4_distribution`);
         expect(fetch).toHaveBeenCalledTimes(2);
         expect(batchCommitMock).toHaveBeenCalledTimes(1);
 

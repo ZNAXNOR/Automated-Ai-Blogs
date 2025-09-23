@@ -8,7 +8,7 @@ import {
   saveR2Outlines,
   _test,
 } from "../../../rounds/r2_outline";
-import { IdeationItem } from "../../../rounds/r1_ideate";
+import { IdeationItem } from "../../../utils/schema";
 import fetch, { Response } from "node-fetch";
 
 // --- MOCKS ---

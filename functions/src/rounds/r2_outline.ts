@@ -1,7 +1,7 @@
 
 import { getFirestore } from "firebase-admin/firestore";
 import fetch from "node-fetch";
-import { IdeationItem } from "./r1_ideate";
+import { IdeationItem } from "../utils/schema";
 import { env } from "../utils/config";
 
 // --- 1. DATA MODELS ---

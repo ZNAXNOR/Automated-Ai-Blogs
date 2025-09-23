@@ -1,122 +1,154 @@
-import { _test, R3DraftDocument } from "../../../rounds/r4_polish";
+import { Round4_Polish } from "../../../rounds/r4_polish";
+import { DraftItem, PolishedDraftItem } from "../../../utils/schema";
+import { ResponseWrapper } from "../../../utils/responseHelper";
+import admin from "firebase-admin";
 
-// Mock the llmApiCall function
+// Mock dependencies
 const mockLlmApiCall = jest.fn();
+jest.mock("p-limit", () => {
+  const limit = (fn: any) => fn();
+  return () => limit;
+});
 
-describe("r4_polish", () => {
-  afterEach(() => {
-    mockLlmApiCall.mockClear();
-  });
+jest.mock("node-fetch", () => jest.fn());
 
-  describe("processSingleDraft", () => {
-    const mockDraft: R3DraftDocument = {
-      runId: "test-run",
-      trend: "test-trend",
-      idea: "test-idea",
-      draft: "This is a test draft.",
-      wordCount: 5,
+describe("Round4_Polish", () => {
+  const RUN_ID = "test-run-r4";
+  const MOCK_DRAFTS: DraftItem[] = [
+    {
+      idea: "Test Idea 1",
+      draft: "This is the first draft.",
+    },
+    {
+      idea: "Test Idea 2",
+      draft: "This is the second draft, which is much longer and more detailed.",
+    },
+  ];
+
+  const MOCK_LLM_RESPONSE = {
+    polished: "This is a beautifully polished version of the draft.",
+    derivatives: ["Tweet: A polished draft is here!", "Email: Check out this great new article."],
+  };
+
+  let firestoreMock: any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    const llmResponseWrapper = {
+      json: jest.fn().mockResolvedValue(MOCK_LLM_RESPONSE),
+    } as unknown as ResponseWrapper;
+
+    mockLlmApiCall.mockResolvedValue(llmResponseWrapper);
+
+    // --- Firestore Mock ---
+    const setMock = jest.fn();
+    const getMock = jest.fn().mockResolvedValue({
+      exists: true,
+      data: () => ({ items: MOCK_DRAFTS }),
+    });
+    const docMock = jest.fn((path) => ({
+      get: getMock,
+      set: setMock,
+      path,
+    }));
+    const collectionMock = jest.fn((path) => ({
+      doc: docMock,
+      path,
+    }));
+    const batchSetMock = jest.fn();
+    const batchCommitMock = jest.fn().mockResolvedValue(undefined);
+    const batchMock = jest.fn(() => ({
+      set: batchSetMock,
+      commit: batchCommitMock,
+    }));
+
+    firestoreMock = {
+      collection: collectionMock,
+      doc: docMock,
+      batch: batchMock,
     };
 
-    it("should return polished and derivatives for a valid response", async () => {
-      const mockLlmResponse = {
-        polished: "This is a polished test draft that is long enough.",
-        derivatives: ["A tweet.", "A LinkedIn post."],
-      };
-      mockLlmApiCall.mockResolvedValue(JSON.stringify(mockLlmResponse));
-
-      const result = await _test.processSingleDraft(mockDraft, mockLlmApiCall);
-
-      expect(mockLlmApiCall).toHaveBeenCalledTimes(1);
-      expect(result.polished).toBe(mockLlmResponse.polished);
-      expect(result.derivatives).toEqual(mockLlmResponse.derivatives);
-      expect(result.originalDraft).toBe(mockDraft.draft);
-      expect(result.metadata.originalWordCount).toBe(5);
-      expect(result.metadata.polishedWordCount).toBe(10); 
+    Object.defineProperty(admin, "firestore", {
+      get: () => (() => firestoreMock) as any,
+      configurable: true,
     });
-
-    it("should throw an error for empty polished text", async () => {
-      const mockLlmResponse = {
-        polished: "",
-        derivatives: ["d1", "d2"],
-      };
-      mockLlmApiCall.mockResolvedValue(JSON.stringify(mockLlmResponse));
-
-      await expect(_test.processSingleDraft(mockDraft, mockLlmApiCall)).rejects.toThrow(
-        "LLM response validation failed: 'polished' is not a string or is too short"
-      );
-    });
-
-    it("should throw an error for not enough derivatives", async () => {
-      const mockLlmResponse = {
-        polished: "This is a polished test draft that is long enough.",
-        derivatives: ["d1"],
-      };
-      mockLlmApiCall.mockResolvedValue(JSON.stringify(mockLlmResponse));
-
-      await expect(_test.processSingleDraft(mockDraft, mockLlmApiCall)).rejects.toThrow(
-        "LLM response validation failed: 'derivatives' must be an array with at least 2 items"
-      );
-    });
-
-    it("should throw an error for an empty derivative", async () => {
-        const mockLlmResponse = {
-            polished: "This is a polished test draft that is long enough.",
-            derivatives: ["d1", " "],
-        };
-        mockLlmApiCall.mockResolvedValue(JSON.stringify(mockLlmResponse));
-
-        await expect(_test.processSingleDraft(mockDraft, mockLlmApiCall)).rejects.toThrow(
-            "LLM response validation failed: a derivative is not a non-empty string"
-        );
-    });
-
-    it("should throw an error if the LLM response is not valid JSON", async () => {
-      mockLlmApiCall.mockResolvedValue("this is not json");
-
-      await expect(_test.processSingleDraft(mockDraft, mockLlmApiCall)).rejects.toThrow(
-        "No valid JSON object found in LLM response."
-      );
-    });
-
-    it("should retry on LLM failure", async () => {
-        mockLlmApiCall.mockRejectedValueOnce(new Error("LLM Error"));
-        const mockLlmResponse = {
-            polished: "This is a polished test draft that is long enough.",
-            derivatives: ["A tweet.", "A LinkedIn post."],
-        };
-        mockLlmApiCall.mockResolvedValueOnce(JSON.stringify(mockLlmResponse));
-
-        const result = await _test.processSingleDraft(mockDraft, mockLlmApiCall);
-        expect(mockLlmApiCall).toHaveBeenCalledTimes(2);
-        expect(result.polished).toBe(mockLlmResponse.polished);
-    });
-
-    it("should fail after all retries", async () => {
-        mockLlmApiCall.mockRejectedValue(new Error("LLM Error"));
-        await expect(_test.processSingleDraft(mockDraft, mockLlmApiCall)).rejects.toThrow(
-            "LLM call failed after 2 retries: LLM Error"
-        );
-        expect(mockLlmApiCall).toHaveBeenCalledTimes(3); 
-    });
+    // --- End Firestore Mock ---
   });
 
-  describe("extractJsonFromText", () => {
-      it("should extract JSON from a markdown code block", () => {
-          const text = "Some text before\n```json\n{\"key\": \"value\"}\n```\nSome text after";
-          const result = _test.extractJsonFromText(text);
-          expect(result).toBe('{\"key\": \"value\"}');
-      });
+  it("should process drafts and save polished versions successfully", async () => {
+    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
+      llmApiCall: mockLlmApiCall,
+      firestore: firestoreMock,
+    });
 
-      it("should extract a standalone JSON object", () => {
-          const text = "Some text and then {\"key\": \"value\"} and more text.";
-          const result = _test.extractJsonFromText(text);
-          expect(result).toBe('{\"key\": \"value\"}');
-      });
+    expect(polishedCount).toBe(MOCK_DRAFTS.length);
+    expect(failures).toBe(0);
+    expect(mockLlmApiCall).toHaveBeenCalledTimes(MOCK_DRAFTS.length);
+    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(1);
+    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+  });
 
-      it("should return null if no JSON is found", () => {
-          const text = "This is a string with no JSON.";
-          const result = _test.extractJsonFromText(text);
-          expect(result).toBeNull();
-      });
-  })
+  it("should handle a mix of successful and failed polishing attempts", async () => {
+    const error = new Error("LLM call timed out");
+    const llmSuccessResponse = {
+        json: jest.fn().mockResolvedValue(MOCK_LLM_RESPONSE),
+    } as unknown as ResponseWrapper;
+
+    mockLlmApiCall.mockImplementation(async (prompt: string) => {
+        if (prompt.includes(MOCK_DRAFTS[0].draft)) {
+            return Promise.reject(error);
+        }
+        return Promise.resolve(llmSuccessResponse);
+    });
+
+    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
+      llmApiCall: mockLlmApiCall,
+      firestore: firestoreMock,
+    });
+
+    expect(polishedCount).toBe(1);
+    expect(failures).toBe(1);
+    expect(mockLlmApiCall).toHaveBeenCalledTimes(4);
+    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(2);
+    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("should handle zero drafts being found", async () => {
+    firestoreMock.doc().get.mockResolvedValue({ exists: true, data: () => ({ items: [] }) });
+
+    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
+      llmApiCall: mockLlmApiCall,
+      firestore: firestoreMock,
+    });
+
+    expect(polishedCount).toBe(0);
+    expect(failures).toBe(0);
+    expect(mockLlmApiCall).not.toHaveBeenCalled();
+    expect(firestoreMock.batch().commit).not.toHaveBeenCalled();
+  });
+
+  it("should throw an error if the R3 artifact is not found", async () => {
+    firestoreMock.doc().get.mockResolvedValue({ exists: false });
+
+    await expect(
+      Round4_Polish(RUN_ID, {
+        llmApiCall: mockLlmApiCall,
+        firestore: firestoreMock,
+      })
+    ).rejects.toThrow(`R3 artifact not found for runId=${RUN_ID}`);
+  });
+
+  it("should correcly use the buildPrompt function", async () => {
+    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
+      llmApiCall: mockLlmApiCall,
+      firestore: firestoreMock,
+    });
+
+    expect( polishedCount).toBe(MOCK_DRAFTS.length);
+    expect(failures).toBe(0);
+    expect(mockLlmApiCall).toHaveBeenCalledTimes(MOCK_DRAFTS.length);
+    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(1);
+    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+  });
 });

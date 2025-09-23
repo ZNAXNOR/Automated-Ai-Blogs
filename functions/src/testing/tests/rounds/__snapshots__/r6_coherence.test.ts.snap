@@ -2,8 +2,25 @@
 
 exports[`r6_coherence Core Functionality & Firestore Writes should calculate coherence, save to Firestore, and match snapshot 1`] = `
 {
-  "coherenceScore": 0.8500000000000001,
-  "createdAt": Any<String>,
-  "draftId": "test-draft-123",
+  "runs/test-run-for-snapshot/artifacts/round6/draft1": {
+    "coherenceScore": 0.925,
+    "createdAt": "mock-server-timestamp",
+    "derivatives": [
+      "derivative A",
+      "derivative B",
+    ],
+    "draftId": "draft1",
+    "validatedText": "This is the first polished draft.",
+  },
+  "runs/test-run-for-snapshot/artifacts/round6/draft2": {
+    "coherenceScore": 0.925,
+    "createdAt": "mock-server-timestamp",
+    "derivatives": [
+      "derivative C",
+      "derivative D",
+    ],
+    "draftId": "draft2",
+    "validatedText": "This is the second polished draft.",
+  },
 }
 `;

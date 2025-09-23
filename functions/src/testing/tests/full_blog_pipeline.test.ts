@@ -1,15 +1,28 @@
 const { Response: FetchResponse } = jest.requireActual("node-fetch");
+const { _test as R0 } = require("../../rounds/r0_trends");
 
 // --- Test Data ---
 const RUN_ID = "test-run-123";
 
-const r0_doc_data = {
-    items: [
-        { query: "ai in marketing" },
-        { query: "content automation" },
-        { query: "ai marketing tools" },
-    ],
-};
+// Use the deterministic R0 processing to create a valid R0 artifact
+const r0_buckets = [
+    {
+        type: "autocomplete" as const,
+        sourceName: "serp:autocomplete",
+        items: [
+            "Apple iPhone 16 launch date?",
+            "OpenAI o3 mini",
+            "Remote work productivity",
+        ],
+    },
+    {
+        type: "rss" as const,
+        sourceName: "rss:theverge",
+        items: ["AI in healthcare"],
+    },
+];
+const { items: r0Trends, sourceCounts } = R0.deterministicProcess(r0_buckets);
+const r0_doc_data = { items: r0Trends, cached: false, sourceCounts };
 
 const r1_ideation_data = [
     { trend: "ai in marketing", ideas: ["idea 1", "idea 2", "idea 3"] },
