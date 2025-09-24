@@ -6,6 +6,7 @@ import { logger } from "../utils/logger";
 import { ARTIFACT_PATHS } from "../utils/constants";
 import { hfComplete } from "../clients/hf";
 import { Round1OutputSchema } from "../utils/schema";
+import { JobPayload } from "../utils/types";
 
 // --- Types and Schemas --------------------------------------------------------
 
@@ -153,7 +154,11 @@ async function writeArtifact(runId: string, items: z.infer<typeof Round2OutputSc
 
 // --- Main Function ------------------------------------------------------------
 
-async function runR2_Outline(runId: string) {
+export async function run(payload: JobPayload) {
+  const { runId } = payload;
+  if (typeof runId !== "string" || !runId) {
+    throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+  }
   logger.info(`Round ${ROUND}: Outline starting`, { runId });
 
   const { items: r1Items } = await getRound1Data(runId);
@@ -166,13 +171,7 @@ async function runR2_Outline(runId: string) {
 
 export const Round2_Outline = onCall(
   { timeoutSeconds: 180, memory: "256MiB", region: env.region },
-  (req) => {
-    const { runId } = req.data;
-    if (typeof runId !== "string" || !runId) {
-      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
-    }
-    return runR2_Outline(runId);
-  }
+  (req) => run(req.data)
 );
 
 // --- Exports for testing ------------------------------------------------------
@@ -181,5 +180,5 @@ export const _test = {
     buildPrompt,
     extractJsonFromText,
     generateOutlines,
-    runR2_Outline,
+    run,
 };

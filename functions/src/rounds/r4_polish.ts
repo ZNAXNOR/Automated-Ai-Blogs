@@ -6,6 +6,7 @@ import { env } from "../utils/config";
 import { logger } from "../utils/logger";
 import { ARTIFACT_PATHS } from "../utils/constants";
 import { hfComplete, extractJsonFromText } from "../clients/hf";
+import { JobPayload } from "../utils/types";
 
 // --- Schemas ------------------------------------------------------------------
 
@@ -112,7 +113,7 @@ async function polishSingleDraft(
       };
     } catch (error) {
       lastError = error;
-      logger.warn(`Attempt ${i + 1} failed for polishing draft: "${item.idea}"`, { runId, error });
+      logger.warn(`Attempt ${i + 1} failed for polishing draft: \"${item.idea}\"`, { runId, error });
     }
   }
   throw lastError; // Throw the last recorded error after all retries have failed
@@ -160,9 +161,13 @@ async function writeArtifacts(
 
 // --- Main Function ------------------------------------------------------------
 
-export async function runR4_Polish(
-  runId: string
+export async function run(
+  payload: JobPayload
 ): Promise<{ polishedCount: number; failures: number }> {
+  const { runId } = payload;
+  if (typeof runId !== "string" || !runId) {
+    throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+  }
   logger.info(`Round ${ROUND}: Polish starting`, { runId });
 
   const { items: r3Items } = await getRound3Data(runId);
@@ -177,7 +182,7 @@ export async function runR4_Polish(
         const polishedItem = await polishSingleDraft(item, runId);
         successfulItems.push(polishedItem);
       } catch (error: any) {
-        logger.error(`Failed to polish draft for "${item.idea}"`, { runId, error: error.message });
+        logger.error(`Failed to polish draft for \"${item.idea}\"`, { runId, error: error.message });
         failedItems.push({ item, error: error.message });
       }
     })
@@ -194,13 +199,7 @@ export async function runR4_Polish(
 
 export const Round4_Polish = onCall(
   { timeoutSeconds: 540, memory: "512MiB", region: env.region },
-  (req) => {
-    const { runId } = req.data;
-    if (typeof runId !== "string" || !runId) {
-      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
-    }
-    return runR4_Polish(runId);
-  }
+  (req) => run(req.data)
 );
 
 // --- Exports for testing ------------------------------------------------------
@@ -208,5 +207,5 @@ export const Round4_Polish = onCall(
 export const _test = {
   buildPrompt,
   polishSingleDraft,
-  runR4_Polish,
+  run,
 };

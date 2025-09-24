@@ -2,6 +2,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { httpClient } from "../clients/http";
 import { env } from "../utils/config";
+import { JobPayload } from "../utils/types";
 
 type Round6Doc = {
   trendId: string;
@@ -44,7 +45,7 @@ async function resolveExistingTagIds(tagNames: string[]): Promise<number[]> {
       if (Array.isArray(data) && data[0]?.id) return Number(data[0].id);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.warn(`Failed to resolve tag ID for "${t}":`, errorMessage);
+      console.warn(`Failed to resolve tag ID for \"${t}\":`, errorMessage);
     }
     return null;
   });
@@ -87,7 +88,8 @@ async function publishToWP({
   return Number(resp.data.id);
 }
 
-export async function Round7_Publish(runId: string) {
+export async function run(payload: JobPayload) {
+  const { runId } = payload;
   if (!runId) throw new Error("runId is required");
 
   const db = getFirestore();

@@ -1,4 +1,4 @@
-import { _test } from "../../../rounds/r0_trends";
+import { deterministicProcess } from "../../../rounds/r0_trends";
 
 describe("Round0 deterministic processing", () => {
   test("normalizes, filters, dedupes, and limits to 12", () => {
@@ -35,7 +35,7 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { items, sourceCounts } = _test.deterministicProcess(buckets);
+    const { items, sourceCounts } = deterministicProcess(buckets);
     // schema checks
     expect(Array.isArray(items)).toBe(true);
     expect(items.length).toBeLessThanOrEqual(12);
@@ -69,7 +69,7 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { items } = _test.deterministicProcess(buckets);
+    const { items } = deterministicProcess(buckets);
     expect(items.length).toBe(0);
   });
 
@@ -82,7 +82,7 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { items } = _test.deterministicProcess(buckets);
+    const { items } = deterministicProcess(buckets);
     expect(items.length).toBe(1);
     expect(items[0].query.toLowerCase()).toContain("openai gpt-5");
   });
@@ -96,7 +96,7 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { items } = _test.deterministicProcess(buckets);
+    const { items } = deterministicProcess(buckets);
     expect(items.length).toBe(0);
   });
 
@@ -109,7 +109,7 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { items } = _test.deterministicProcess(buckets);
+    const { items } = deterministicProcess(buckets);
     expect(items.length).toBeLessThanOrEqual(12);
   });
 
@@ -127,14 +127,14 @@ describe("Round0 deterministic processing", () => {
       },
     ];
 
-    const { sourceCounts } = _test.deterministicProcess(buckets);
+    const { sourceCounts } = deterministicProcess(buckets);
     expect(sourceCounts["rss:test"]).toBeGreaterThanOrEqual(1);
     expect(sourceCounts["serp:trending"]).toBeGreaterThanOrEqual(1);
   });
 
   test("handles completely empty buckets gracefully", () => {
     const buckets: any[] = [];
-    const { items, sourceCounts } = _test.deterministicProcess(buckets);
+    const { items, sourceCounts } = deterministicProcess(buckets);
     expect(items).toEqual([]);
     expect(sourceCounts).toEqual({});
   });

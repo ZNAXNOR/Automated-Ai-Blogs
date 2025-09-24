@@ -13,13 +13,12 @@ interface PipelineResult {
   payload: JobPayload;
   status: 'completed' | 'failed';
   error?: string;
-  wpPostUrl?: string;
-  wpPostId?: number;
 }
 
-export async function runPipeline(initialTrendInput: any): Promise<PipelineResult> {
+export async function runPipeline(initialTrendInput: any, runId: string): Promise<PipelineResult> {
   const payload: JobPayload = {
-    trendInput: initialTrendInput
+    trendInput: initialTrendInput,
+    runId
   };
 
   try {
@@ -45,13 +44,11 @@ export async function runPipeline(initialTrendInput: any): Promise<PipelineResul
     Object.assign(payload, out6);
 
     const out7 = await R7.run(payload);
-    Object.assign(payload, { wpPostUrl: out7.wpPostUrl, wpPostId: out7.wpPostId });
+    Object.assign(payload, out7);
 
     return {
       payload,
       status: 'completed',
-      wpPostUrl: out7.wpPostUrl,
-      wpPostId: out7.wpPostId
     };
   } catch (err: any) {
     return {

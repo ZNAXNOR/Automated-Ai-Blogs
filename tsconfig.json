@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "es6",
+    "target": "es2020",
     "module": "commonjs",
     "outDir": "./dist",
     "rootDir": ".",
@@ -11,7 +11,8 @@
       "@utils/*": ["functions/utils/*"],
       "@clients/*": ["functions/src/clients/*"],
       "@src/*": ["functions/src/*"]
-    }
+    },
+    "types": ["jest"]
   },
   "include": ["functions/src/**/*.ts", "functions/src/testing/tests/**/*.ts"],
   "exclude": ["node_modules"]

@@ -1,5 +1,5 @@
 // src/testing/tests/rounds/r7_publish.test.ts
-import { Round7_Publish as runRound7Publish } from "../../../../src/rounds/r7_publish";
+import { run } from "../../../../src/rounds/r7_publish";
 import { httpClient } from "../../../../src/clients/http";
 import { Timestamp } from "firebase-admin/firestore";
 
@@ -68,7 +68,7 @@ describe("Round7 Publish", () => {
         return { data: { id: 123 }, status: 201 };
     });
 
-    const res = await runRound7Publish(runId);
+    const res = await run({ runId });
 
     expect(res.succeeded).toBe(1);
     expect(res.processed).toBe(1);
@@ -92,7 +92,7 @@ describe("Round7 Publish", () => {
       throw new Error("network fail");
     });
 
-    const res = await runRound7Publish(runId);
+    const res = await run({ runId });
     expect(res.failed).toBe(1);
     expect(mockBatch.set).toHaveBeenCalledTimes(1);
     const call = mockBatch.set.mock.calls[0];
@@ -110,7 +110,7 @@ describe("Round7 Publish", () => {
     });
     mockFirestore.r7data.push({ trendId: "t3" }); // This trendId already exists in round7
 
-    const res = await runRound7Publish(runId);
+    const res = await run({ runId });
     expect(res.skipped).toBe(1);
     expect(res.processed).toBe(1);
     expect(mockBatch.set).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe("Round7 Publish", () => {
         metadata: { description: "D", tags: [] },
     });
 
-    const res = await runRound7Publish(runId);
+    const res = await run({ runId });
     expect(res.failed).toBe(1);
     expect(res.succeeded).toBe(0);
     expect(mockBatch.set).toHaveBeenCalledTimes(1);
@@ -143,7 +143,7 @@ describe("Round7 Publish", () => {
 
     (httpClient.request as jest.Mock).mockResolvedValue({ status: 500, data: { message: "Internal Server Error" } });
 
-    const res = await runRound7Publish(runId);
+    const res = await run({ runId });
     expect(res.failed).toBe(1);
     expect(res.succeeded).toBe(0);
     expect(mockBatch.set).toHaveBeenCalledTimes(1);

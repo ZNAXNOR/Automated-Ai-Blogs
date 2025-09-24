@@ -6,6 +6,7 @@ import { logger } from "../utils/logger";
 import { ARTIFACT_PATHS } from "../utils/constants";
 import { hfComplete } from "../clients/hf";
 import pLimit from "p-limit";
+import { JobPayload } from "../utils/types";
 
 // --- Schemas ------------------------------------------------------------------
 
@@ -177,9 +178,13 @@ async function writeArtifact(
 
 // --- Main Function ------------------------------------------------------------
 
-export async function runR3_Draft(
-  runId: string
+export async function run(
+  payload: JobPayload
 ): Promise<{ draftsCreated: number; failures: number }> {
+  const { runId } = payload;
+  if (typeof runId !== "string" || !runId) {
+    throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+  }
   logger.info(`Round ${ROUND}: Draft starting`, { runId });
 
   const { items: r2Items } = await getRound2Data(runId);
@@ -213,13 +218,7 @@ export async function runR3_Draft(
 
 export const Round3_Draft = onCall(
   { timeoutSeconds: 300, memory: "256MiB", region: env.region },
-  (req) => {
-    const { runId } = req.data;
-    if (typeof runId !== "string" || !runId) {
-      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
-    }
-    return runR3_Draft(runId);
-  }
+  (req) => run(req.data)
 );
 
 // --- Exports for testing ------------------------------------------------------
@@ -230,5 +229,5 @@ export const _test = {
   generateDraftForOutline,
   sanitizeDraft,
   wordCount,
-  runR3_Draft,
+  run,
 };

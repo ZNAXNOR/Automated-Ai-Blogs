@@ -35,7 +35,7 @@ jest.mock("../../../clients/hf", () => ({
   extractJsonFromText: jest.fn(),
 }));
 
-import { _test as Round4_Polish } from "../../../rounds/r4_polish";
+import { run } from "../../../rounds/r4_polish";
 import * as hf from "../../../clients/hf";
 import { HttpsError } from "firebase-functions/v2/https";
 import { ARTIFACT_PATHS } from "../../../utils/constants";
@@ -79,7 +79,7 @@ describe("runR4_Polish", () => {
   it("should process all drafts successfully, writing a single polished artifact", async () => {
     mockHfComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
 
-    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ polishedCount: 2, failures: 0 });
     expect(mockGet).toHaveBeenCalledTimes(1);
@@ -103,7 +103,7 @@ describe("runR4_Polish", () => {
       .mockRejectedValueOnce(new Error("LLM is flaky"))       // 2nd item fails once
       .mockRejectedValueOnce(new Error("LLM is still flaky")); // 2nd item fails retry
 
-    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ polishedCount: 1, failures: 1 });
     expect(mockBatchSet).toHaveBeenCalledTimes(2); // One success, one failure
@@ -132,7 +132,7 @@ describe("runR4_Polish", () => {
         .mockReturnValueOnce(null) // First call fails to find JSON
         .mockReturnValue(JSON.stringify(VALID_LLM_OUTPUT)); // Subsequent calls succeed
 
-    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ polishedCount: 2, failures: 0 });
     expect(mockHfComplete).toHaveBeenCalledTimes(3); // 1 initial fail, 1 retry success, 1 for second item
@@ -140,7 +140,7 @@ describe("runR4_Polish", () => {
 
   it("should throw not-found if the R3 artifact does not exist", async () => {
     mockGet.mockResolvedValue({ exists: false });
-    await expect(Round4_Polish.runR4_Polish(RUN_ID)).rejects.toThrow(
+    await expect(run({ runId: RUN_ID })).rejects.toThrow(
       new HttpsError("not-found", `Round 3 artifact not found for runId=${RUN_ID}`)
     );
   });
@@ -148,7 +148,7 @@ describe("runR4_Polish", () => {
   it("should handle the case where all polishing attempts fail", async () => {
     mockHfComplete.mockRejectedValue(new Error("LLM is down"));
 
-    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ polishedCount: 0, failures: 2 });
     expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only the failure artifact

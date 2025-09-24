@@ -1,80 +1,114 @@
-jest.mock("../../../utils/llmClient");
+import { hfComplete, extractJsonFromText } from "../../../clients/hf";
 
-import { _test as r5_test_functions } from "../../../rounds/r5_meta";
-const { generateMetaForDraft } = r5_test_functions;
+// --- Mocks ---------------------------------------------------------------------
 
-import { LLMClient } from "../../../utils/llmClient";
+// These variables must be declared before the mock implementations
+let mockDoc: jest.Mock;
+let mockBatchSet: jest.Mock;
+let mockBatchCommit: jest.Mock;
+let mockBatch: jest.Mock;
 
-const llmMock = new LLMClient() as jest.Mocked<LLMClient>;
+// Mock Firestore *before* the module that uses it is imported
+jest.mock("firebase-admin/firestore", () => {
+  // Initialize the mocks here
+  mockDoc = jest.fn();
+  mockBatchSet = jest.fn();
+  mockBatchCommit = jest.fn().mockResolvedValue(undefined);
+  mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
 
-const r4Sample = {
-  id: "test-draft-1",
-  polished: `
-    The future of AI in marketing is not just about automation; it's about creating hyper-personalized experiences that resonate with customers on a deeper level. This draft explores how AI can analyze vast amounts of customer data to predict behavior, tailor content, and optimize campaigns in real-time. We delve into the ethical considerations and the importance of transparency in AI-driven marketing, ensuring that customer trust is maintained. The article also provides actionable insights for marketers looking to adopt AI tools, highlighting the potential for unprecedented efficiency and engagement. By leveraging AI, brands can build deeper, more meaningful relationships with their audience, turning data into a competitive advantage. This is not a distant future; it's happening now, and early adopters are already reaping the rewards. We examine case studies from leading brands that have successfully integrated AI into their marketing strategies. From chatbots that provide instant support to predictive analytics that forecast trends, the applications are vast. The key is to balance technological power with a human-centric approach, ensuring that AI serves rather than dictates. This comprehensive guide will equip you with the knowledge to navigate the evolving landscape of AI in marketing.
-  `,
-  derivatives: [
-    "AI is revolutionizing marketing by enabling hyper-personalized content. #AI #Marketing",
-    "Leverage AI to predict customer behavior and optimize your marketing campaigns in real-time.",
-  ],
-};
+  return {
+    getFirestore: jest.fn(() => ({
+      doc: mockDoc,
+      batch: mockBatch,
+    })),
+    FieldValue: {
+      serverTimestamp: jest.fn(),
+    },
+  };
+});
 
-const validMockResponse = {
-    seoTitle: "AI Marketing Trends: 2025 Guide",
-    metaDescription: "Learn how AI is reshaping content creation and marketing workflows.",
-    tags: ["AI", "Marketing", "Content Automation"],
-    categories: ["Marketing", "Technology"],
-    excerpt: "This is a detailed exploration into how artificial intelligence is fundamentally changing the marketing landscape. We cover everything from personalized content creation and automated campaign management to the ethical challenges that arise. Our guide provides practical, actionable advice for businesses looking to integrate AI into their workflows, ensuring they can leverage these powerful tools to connect with audiences more effectively and achieve a higher return on investment in a competitive digital world.",
-    relatedKeywords: ["AI in marketing", "content automation", "AI marketing tools"],
-    imageSuggestions: ["prompt: AI robot creating content", "reuse: company logo"]
-};
+jest.mock("../../../clients/hf");
+
+// Now, import the module to test (it will use the mocks above)
+const { _test } = require("../../../rounds/r5_meta");
+const { run } = _test;
 
 
-describe("R4 → R5 Pairwise Metadata Generation", () => {
-  beforeEach(() => {
-    llmMock.generate.mockClear();
-    llmMock.generate.mockResolvedValue({ text: JSON.stringify(validMockResponse) });
-  });
+// --- Test Suite ---------------------------------------------------------------
+describe("Pairwise: R4 -> R5", () => {
+    const runId = "pairwise-test-r4-r5";
 
-  it("generates metadata for a single polished draft and matches snapshot", async () => {
-    const result = await Promise.all([r4Sample.polished].map(draft => generateMetaForDraft(draft, llmMock)));
-    expect(result.length).toBe(1);
-    const meta = result[0]!;
-    expect(meta.seoTitle).toBeDefined();
-    expect(meta.tags.length).toBeGreaterThan(0);
-    expect(meta).toMatchSnapshot();
-  });
+    // Test constants
+    const r4ArtifactPath = `runs/${runId}/artifacts/round4_polished_drafts`;
+    const r5ArtifactPath = `runs/${runId}/artifacts/round5_meta`;
 
-  it("generates metadata for multiple R4 items", async () => {
-    const items = [
-      r4Sample.polished,
-      r4Sample.polished, // Using the same long draft twice
-      r4Sample.polished
+    const r4Items = [
+        { idea: "The History of Espresso", polishedDraft: "Once upon a time in Italy... it was a dark and stormy night... and coffee was needed. This is a long story about coffee that is definitely more than 250 characters long so that it passes the validation check for the minimum length of the draft. More content, more content, more content, more content, more content, more content, more content, more content.", derivatives: ["d1", "d2"] },
+        { idea: "Modern Art Movements", polishedDraft: "From Cubism to a new canvas... and many other things happened in the world of art. This is a long story about art that is definitely more than 250 characters long so that it passes the validation check for the minimum length of the draft. More content, more content, more content, more content, more content, more content, more content, more content.", derivatives: ["d3", "d4"] },
     ];
-    const result = await Promise.all(items.map(draft => generateMetaForDraft(draft, llmMock)));
-    expect(result.length).toBe(items.length);
-    // Ensure LLM was called once per item
-    expect(llmMock.generate).toHaveBeenCalledTimes(items.length);
-  });
 
-  it("ensures metadata fields are non-empty and arrays are valid", async () => {
-    const result = await Promise.all([r4Sample.polished].map(draft => generateMetaForDraft(draft, llmMock)));
-    const meta = result[0]!;
-    expect(meta.seoTitle).toBeTruthy();
-    expect(meta.metaDescription).toBeTruthy();
-    expect(meta.excerpt).toBeTruthy();
-    expect(meta.tags.length).toBeGreaterThan(0);
-    expect(meta.categories.length).toBeGreaterThan(0);
-    expect(meta.relatedKeywords.length).toBeGreaterThan(0);
-    expect(meta.imageSuggestions.length).toBeGreaterThan(0);
-  });
+    // This response must match the MetaSchema in r5_meta.ts
+    const llmJsonResponse = {
+        seoTitle: "A Brief History of Espresso",
+        metaDescription: "From its origins in Italy to its global domination, explore the rich history of espresso.",
+        tags: ["espresso", "coffee", "history", "italy"],
+        categories: ["Food & Drink", "History"],
+        excerpt: "Delve into the fascinating journey of espresso, from its invention in 19th century Italy to becoming a global coffee phenomenon. This article explores the key innovations and cultural shifts that shaped the world's favorite strong coffee. We will cover the invention of the first espresso machines and their lasting impact on culture.", // Now > 50 words
+        relatedKeywords: ["espresso history", "italian coffee", "espresso machine"],
+        imageSuggestions: ["A vintage espresso machine", "A cup of freshly brewed espresso"],
+    };
 
-  it("validates content length limits", async () => {
-    const result = await Promise.all([r4Sample.polished].map(draft => generateMetaForDraft(draft, llmMock)));
-    const meta = result[0]!;
-    expect(meta.seoTitle.length).toBeLessThanOrEqual(70);
-    expect(meta.metaDescription.length).toBeLessThanOrEqual(160);
-    const wordCount = meta.excerpt.split(/\s+/).filter(Boolean).length;
-    expect(wordCount).toBeGreaterThanOrEqual(50);
-    expect(wordCount).toBeLessThanOrEqual(100);
-  });
+    let r4DocMock: { get: jest.Mock; };
+    let r5SuccessDocMock: {};
+
+    beforeEach(() => {
+        // Clear mocks before each test
+        jest.clearAllMocks();
+
+        // Set up mock return values
+        r4DocMock = { get: jest.fn().mockResolvedValue({ exists: true, data: () => ({ items: r4Items }) }) };
+        r5SuccessDocMock = { set: jest.fn() };
+
+        mockDoc.mockImplementation((path: string) => {
+            if (path === r4ArtifactPath) return r4DocMock;
+            if (path === r5ArtifactPath) return r5SuccessDocMock;
+            return { get: jest.fn().mockResolvedValue({ exists: false }) };
+        });
+
+        (hfComplete as jest.Mock).mockResolvedValue("Some LLM response");
+        (extractJsonFromText as jest.Mock).mockReturnValue(JSON.stringify(llmJsonResponse));
+    });
+
+    test("R4 output feeds correctly into R5 meta generation", async () => {
+        await run({runId});
+
+        // 1. Check artifact read
+        expect(r4DocMock.get).toHaveBeenCalledTimes(1);
+
+        // 2. Check HF client calls (should not retry)
+        expect(hfComplete).toHaveBeenCalledTimes(r4Items.length);
+        expect(extractJsonFromText).toHaveBeenCalledTimes(r4Items.length);
+
+        // 3. Check batch write
+        expect(mockBatch).toHaveBeenCalledTimes(1);
+        expect(mockBatchSet).toHaveBeenCalledTimes(1);
+        expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+        // 4. Verify the data written to the success document
+        const [docRef, writtenData] = mockBatchSet.mock.calls[0];
+        expect(docRef).toBe(r5SuccessDocMock);
+
+        expect(writtenData).toHaveProperty("items");
+        expect(writtenData.items.length).toBe(r4Items.length);
+
+        // 5. Deep inspection of the written data
+        for (let i = 0; i < writtenData.items.length; i++) {
+            const item = writtenData.items[i];
+            const sourceItem = r4Items[i];
+            expect(item).toEqual({
+                idea: sourceItem.idea,
+                meta: llmJsonResponse, 
+            });
+        }
+    });
 });

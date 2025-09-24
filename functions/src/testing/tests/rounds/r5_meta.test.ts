@@ -24,19 +24,21 @@ jest.mock("firebase-admin", () => ({
   ),
 }));
 
-jest.mock("../../../clients/gemini", () => ({
+// Mock the correct Hugging Face client
+jest.mock("../../../clients/hf", () => ({
   __esModule: true,
-  geminiComplete: jest.fn(),
+  hfComplete: jest.fn(),
   extractJsonFromText: jest.fn(),
 }));
 
-import { _test as Round5_Meta } from "../../../rounds/r5_meta";
-import * as gemini from "../../../clients/gemini";
+import { run } from "../../../rounds/r5_meta";
+import * as hf from "../../../clients/hf"; // Import the mocked client
 import { HttpsError } from "firebase-functions/v2/https";
 import { ARTIFACT_PATHS } from "../../../utils/constants";
 
-const mockGeminiComplete = gemini.geminiComplete as jest.Mock;
-const mockExtractJson = gemini.extractJsonFromText as jest.Mock;
+// Use the mocked Hugging Face functions
+const mockHfComplete = hf.hfComplete as jest.Mock;
+const mockExtractJson = hf.extractJsonFromText as jest.Mock;
 
 const RUN_ID = "test-run-meta-123";
 
@@ -71,12 +73,12 @@ describe("runR5_Meta", () => {
   });
 
   it("should process all drafts and generate metadata successfully", async () => {
-    mockGeminiComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+    mockHfComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
 
-    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ metaCount: 2, failures: 0 });
-    expect(mockGeminiComplete).toHaveBeenCalledTimes(2);
+    expect(mockHfComplete).toHaveBeenCalledTimes(2); // Check the correct mock
     expect(mockBatchSet).toHaveBeenCalledTimes(1);
     expect(mockBatchCommit).toHaveBeenCalledTimes(1);
 
@@ -89,23 +91,23 @@ describe("runR5_Meta", () => {
   });
 
   it("should handle a mix of successful and failed metadata generations", async () => {
-    mockGeminiComplete
+    mockHfComplete
       .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT))
       .mockRejectedValueOnce(new Error("LLM is having a moment"))
       .mockRejectedValueOnce(new Error("LLM is still having a moment"))
-      .mockRejectedValueOnce(new Error("LLM has given up")); // Add this for the final retry
+      .mockRejectedValueOnce(new Error("LLM has given up"));
 
-    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ metaCount: 1, failures: 1 });
-    expect(mockGeminiComplete).toHaveBeenCalledTimes(4); // 1 success, 1 fail, 2 retries
+    expect(mockHfComplete).toHaveBeenCalledTimes(4); // 1 success, 1 fail, 2 retries
     expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only writes success artifact
   });
 
   it("should throw not-found if the R4 artifact does not exist", async () => {
     mockGet.mockResolvedValue({ exists: false });
 
-    await expect(Round5_Meta.runR5_Meta(RUN_ID)).rejects.toThrow(
+    await expect(run({ runId: RUN_ID })).rejects.toThrow(
       new HttpsError("not-found", `Round 4 artifact not found for runId=${RUN_ID}`)
     );
   });
@@ -118,19 +120,19 @@ describe("runR5_Meta", () => {
       ],
     };
     mockGet.mockResolvedValue({ exists: true, data: () => shortDraftData });
-    mockGeminiComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+    mockHfComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
 
-    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ metaCount: 1, failures: 1 });
-    expect(mockGeminiComplete).toHaveBeenCalledTimes(1); // Only called for the valid draft
+    expect(mockHfComplete).toHaveBeenCalledTimes(1); // Only called for the valid draft
   });
 
   it("should handle failure to parse JSON from LLM", async () => {
     mockExtractJson.mockReturnValue(null);
-    mockGeminiComplete.mockResolvedValue("this is not json");
+    mockHfComplete.mockResolvedValue("this is not json");
 
-    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ metaCount: 0, failures: 2 });
   });

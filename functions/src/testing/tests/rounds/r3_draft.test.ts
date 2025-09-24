@@ -14,7 +14,7 @@ jest.mock("firebase-admin", () => ({
 
 jest.mock("../../../clients/hf");
 
-import { _test as Round3_Draft } from "../../../rounds/r3_draft";
+import { run } from "../../../rounds/r3_draft";
 import * as hf from "../../../clients/hf";
 import { HttpsError } from "firebase-functions/v2/https";
 import { ARTIFACT_PATHS } from "../../../utils/constants";
@@ -53,7 +53,7 @@ describe("runR3_Draft", () => {
   it("should fetch R2 data, generate drafts for all items, and write them to a new artifact", async () => {
     mockHfComplete.mockResolvedValue(VALID_DRAFT_RESPONSE);
 
-    const result = await Round3_Draft.runR3_Draft(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ draftsCreated: 2, failures: 0 });
     expect(mockDoc).toHaveBeenCalledWith(ARTIFACT_PATHS.R2_OUTLINE.replace("{runId}", RUN_ID));
@@ -69,7 +69,7 @@ describe("runR3_Draft", () => {
 
   it("should throw an error if the R2 artifact is not found", async () => {
     mockGet.mockResolvedValue({ exists: false });
-    await expect(Round3_Draft.runR3_Draft(RUN_ID)).rejects.toThrow(
+    await expect(run({ runId: RUN_ID })).rejects.toThrow(
       new HttpsError("not-found", `Round 2 artifact not found for runId=${RUN_ID}`)
     );
   });
@@ -79,7 +79,7 @@ describe("runR3_Draft", () => {
       .mockResolvedValueOnce(VALID_DRAFT_RESPONSE) 
       .mockRejectedValueOnce(new Error("HF API is down"));
 
-    const result = await Round3_Draft.runR3_Draft(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ draftsCreated: 1, failures: 1 });
     expect(mockSet).toHaveBeenCalledTimes(1);
@@ -94,7 +94,7 @@ describe("runR3_Draft", () => {
       .mockResolvedValueOnce(VALID_DRAFT_RESPONSE)
       .mockResolvedValue(VALID_DRAFT_RESPONSE); // For the second item
 
-    const result = await Round3_Draft.runR3_Draft(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ draftsCreated: 2, failures: 0 });
     expect(mockHfComplete).toHaveBeenCalledTimes(3); // 1 initial + 1 retry for the first item, 1 for the second
@@ -103,7 +103,7 @@ describe("runR3_Draft", () => {
   it("should fail an item if it repeatedly fails to meet word count", async () => {
     mockHfComplete.mockResolvedValue(SHORT_DRAFT_RESPONSE);
 
-    const result = await Round3_Draft.runR3_Draft(RUN_ID);
+    const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ draftsCreated: 0, failures: 2 });
     expect(mockSet).toHaveBeenCalledTimes(1);

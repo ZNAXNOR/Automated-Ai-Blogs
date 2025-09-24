@@ -5,7 +5,8 @@ import pLimit from "p-limit";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
 import { ARTIFACT_PATHS } from "../utils/constants";
-import { geminiComplete, extractJsonFromText } from "../clients/gemini";
+import { hfComplete, extractJsonFromText } from "../clients/hf";
+import { JobPayload } from "../utils/types";
 
 // --- Schemas ------------------------------------------------------------------
 
@@ -98,7 +99,7 @@ function buildPrompt(draft: string): string {
   `;
 }
 
-const metaGenerator = (prompt: string) => geminiComplete(prompt);
+const metaGenerator = (prompt: string) => hfComplete(prompt, env.hfModelR5);
 
 async function generateSingleMeta(
   item: z.infer<typeof Round4ItemSchema>,
@@ -159,9 +160,13 @@ async function writeArtifacts(
 
 // --- Main Function ------------------------------------------------------------
 
-export async function runR5_Meta(
-  runId: string
+export async function run(
+  payload: JobPayload
 ): Promise<{ metaCount: number; failures: number }> {
+  const { runId } = payload;
+  if (typeof runId !== "string" || !runId) {
+    throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+  }
   logger.info(`Round ${ROUND}: Meta starting`, { runId });
 
   const { items: r4Items } = await getRound4Data(runId);
@@ -193,13 +198,7 @@ export async function runR5_Meta(
 
 export const Round5_Meta = onCall(
   { timeoutSeconds: 300, memory: "512MiB", region: env.region },
-  (req) => {
-    const { runId } = req.data;
-    if (typeof runId !== "string" || !runId) {
-      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
-    }
-    return runR5_Meta(runId);
-  }
+  (req) => run(req.data)
 );
 
 // --- Exports for testing ------------------------------------------------------
@@ -207,5 +206,5 @@ export const Round5_Meta = onCall(
 export const _test = {
   buildPrompt,
   generateSingleMeta,
-  runR5_Meta,
+  run,
 };

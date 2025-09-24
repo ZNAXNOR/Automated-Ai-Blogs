@@ -11,6 +11,7 @@ import {
   Round1OutputSchema,
   type TrendItem,
 } from "../utils/schema";
+import { JobPayload } from "../utils/types";
 
 // --- Types and Schemas --------------------------------------------------------
 
@@ -61,38 +62,7 @@ async function getRound0Data(runId: string): Promise<TrendItem[]> {
 }
 
 function buildPrompt(trendQueries: string[]): string {
-  return `You are an expert blog strategist helping select article titles from trending topics.
-
-TASK:
-- For each input trend, generate 3–5 unique, creative blog title ideas.
-- Titles should be short (≤12 words), clear, and engaging.
-- Focus on human readability and search-friendliness.
-- Avoid clickbait and repetition.
-
-OUTPUT FORMAT (strict JSON only):
-[
-  {
-    "trend": "<trend string>",
-    "ideas": ["<title1>", "<title2>", "<title3>"]
-  }
-]
-
-EXAMPLE:
-Input: ["AI in healthcare"]
-Output:
-[
-  {
-    "trend": "AI in healthcare",
-    "ideas": [
-      "How AI is Transforming Healthcare in 2025",
-      "AI in Hospitals: Benefits and Challenges",
-      "The Future of Medicine with Artificial Intelligence"
-    ]
-  }
-]
-
-Input: ${JSON.stringify(trendQueries)}
-`;
+  return `You are an expert blog strategist helping select article titles from trending topics.\n\nTASK:\n- For each input trend, generate 3–5 unique, creative blog title ideas.\n- Titles should be short (≤12 words), clear, and engaging.\n- Focus on human readability and search-friendliness.\n- Avoid clickbait and repetition.\n\nOUTPUT FORMAT (strict JSON only):\n[\n  {\n    "trend": "<trend string>",\n    "ideas": ["<title1>", "<title2>", "<title3>"]\n  }\n]\n\nEXAMPLE:\nInput: ["AI in healthcare"]\nOutput:\n[\n  {\n    "trend": "AI in healthcare",\n    "ideas": [\n      "How AI is Transforming Healthcare in 2025",\n      "AI in Hospitals: Benefits and Challenges",\n      "The Future of Medicine with Artificial Intelligence"\n    ]\n  }\n]\n\nInput: ${JSON.stringify(trendQueries)}\n`;
 }
 
 async function generateIdeas(trendQueries: string[]): Promise<z.infer<typeof LlmResponseSchema>> {
@@ -158,7 +128,11 @@ async function writeArtifact(runId: string, items: IdeationItem[]): Promise<void
 
 // --- Main Function ------------------------------------------------------------
 
-async function runR1_Ideate(runId: string) {
+export async function run(payload: JobPayload) {
+  const { runId } = payload;
+  if (typeof runId !== 'string' || !runId) {
+    throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+  }
   logger.info(`Round ${ROUND}: Ideate starting`, { runId });
 
   const trendsFromDoc = await getRound0Data(runId);
@@ -186,11 +160,7 @@ async function runR1_Ideate(runId: string) {
 
 export const Round1_Ideate = onCall(
   { timeoutSeconds: 180, memory: "256MiB", region: env.region },
-  (req) => {
-    const { runId } = req.data;
-    if (typeof runId !== 'string' || !runId) {
-      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
-    }
-    return runR1_Ideate(runId);
-  }
+  (req) => run(req.data)
 );
+
+export const _test = { run };

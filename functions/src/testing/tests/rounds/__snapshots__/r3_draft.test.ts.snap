@@ -1,9 +1,0 @@
-// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
-
-exports[`Round 3: Draft Generation Utility Functions convertOutlineToString should format the outline correctly 1`] = `
-"## Introduction
-- What is AI writing?
-
-## Conclusion
-- Summary of benefits"
-`;

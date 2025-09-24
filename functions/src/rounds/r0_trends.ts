@@ -26,7 +26,7 @@ import { env } from "../utils/config";
 import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } from "../clients/serp";
 import { getCache, setCache } from "../utils/cache";
 import { Round0InputSchema, Round0OutputSchema } from "../utils/schema";
-import type { TrendItem, Round0Input } from "../utils/schema";
+import type { TrendItem, Round0Input, JobPayload } from "../utils/types";
 import { ARTIFACT_PATHS } from "../utils/constants";
 import { logger } from "../utils/logger";
 import { ResponseWrapper } from "../utils/responseHelper";
@@ -315,10 +315,10 @@ async function getCachedSerp(key: string, fetcher: () => Promise<string[]>): Pro
     return { list, fromCache: false };
 }
 
-export async function runR0_Trends(input: any) {
+export async function run(payload: JobPayload) {
     const t0 = Date.now();
 
-    const validation = Round0InputSchema.safeParse(input);
+    const validation = Round0InputSchema.safeParse(payload);
     if (!validation.success) {
         logger.error(`Round 0 input validation failed`, { error: validation.error });
         throw new HttpsError("invalid-argument", "Invalid input", { error: validation.error.format() });
@@ -396,7 +396,7 @@ export async function runR0_Trends(input: any) {
 
 export const Round0_Trends = onCall(
   { timeoutSeconds: 300, memory: "256MiB", region: env.region },
-  (req) => runR0_Trends(req.data)
+  (req) => run(req.data)
 );
 
 export const _test = {
