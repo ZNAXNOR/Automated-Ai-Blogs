@@ -1,243 +1,212 @@
-/**
- * Round 4: Polish & Derive
- *
- * This round takes the raw drafts from Round 3, uses an LLM to polish the text,
- * and generates several derivative content formats (e.g., social media posts, email snippets).
- */
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import fetch from "node-fetch";
-import pLimit from "p-limit";
+import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { z } from "zod";
+import pLimit from "p-limit";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ResponseWrapper } from "../utils/responseHelper";
 import { ARTIFACT_PATHS } from "../utils/constants";
-import {
-  Round3OutputSchema,
-  Round4InputSchema,
-  Round4OutputSchema,
-  DraftItem,
-  PolishedDraftItem as R4PolishedItem,
-} from "../utils/schema";
+import { hfComplete, extractJsonFromText } from "../clients/hf";
 
-export { R4PolishedItem };
-export type R3DraftDocument = z.infer<typeof Round3OutputSchema>;
+// --- Schemas ------------------------------------------------------------------
 
-// --- 1. CONFIGURATION ---
-const CONCURRENCY = 5;
-const POLISH_VERSION = "v1.2"; // Incremented version due to major refactor
-const RETRIES = 2;
-const DRAFT_TIMEOUT = 30000; // 30 seconds
-
-// Schema for the raw output from the LLM
-const LlmResponseSchema = z.object({
-  polished: z.string().min(100),
-  derivatives: z.array(z.string().min(1)).min(2),
+const Round3ItemSchema = z.object({
+  idea: z.string(),
+  draft: z.string(),
+  // ... other R3 fields if needed, but keeping it minimal for R4
 });
 
-export interface FailedDraft {
-  draft: DraftItem;
-  error: string;
-  timestamp: number;
+const Round3OutputSchema = z.object({
+  items: z.array(Round3ItemSchema),
+});
+
+// Schema for the expected raw output from the LLM
+const LlmResponseSchema = z.object({
+  polished: z.string().min(100, "Polished text must be at least 100 characters."),
+  derivatives: z
+    .array(z.string().min(1))
+    .min(2, "Must have at least two derivative content pieces."),
+});
+
+// Schema for the final polished item we will save
+const PolishedDraftItemSchema = z.object({
+  idea: z.string(),
+  polishedDraft: z.string(),
+  derivatives: z.array(z.string()),
+});
+
+const Round4OutputSchema = z.object({
+  items: z.array(PolishedDraftItemSchema),
+});
+
+const FailedItemSchema = z.object({
+  item: Round3ItemSchema,
+  error: z.string(),
+});
+
+// --- Constants ----------------------------------------------------------------
+
+const ROUND = 4;
+const CONCURRENCY = 4;
+const RETRIES = 1;
+
+// --- Admin SDK ----------------------------------------------------------------
+
+if (!admin.apps.length) {
+  admin.initializeApp();
 }
+const db = admin.firestore();
 
-// --- 2. I/O OPERATIONS ---
+// --- Helper Functions ---------------------------------------------------------
 
-async function fetchR3Data(
-  runId: string,
-  db = getFirestore()
-): Promise<DraftItem[]> {
-  logger.info("R4: Fetching R3 data", { runId });
-  const r3ArtifactPath = ARTIFACT_PATHS.R3_DRAFT.replace("{runId}", runId);
-  const r3Snap = await db.doc(r3ArtifactPath).get();
-
-  if (!r3Snap.exists) {
-    logger.error("R3 artifact not found", { runId, path: r3ArtifactPath });
-    throw new Error(`R3 artifact not found for runId=${runId}`);
+async function getRound3Data(runId: string): Promise<z.infer<typeof Round3OutputSchema>> {
+  const docRef = db.doc(ARTIFACT_PATHS.R3_DRAFT.replace("{runId}", runId));
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) {
+    throw new HttpsError("not-found", `Round 3 artifact not found for runId=${runId}`);
   }
 
-  const r3Data = r3Snap.data();
-  const validationResult = Round3OutputSchema.safeParse(r3Data);
-
+  const validationResult = Round3OutputSchema.safeParse(docSnap.data());
   if (!validationResult.success) {
-    logger.error("R3 data validation failed", {
-      runId,
-      error: validationResult.error,
-    });
-    throw new Error("R3 data validation failed");
+    logger.error("Round 3 data validation failed", { runId, error: validationResult.error });
+    throw new HttpsError("internal", "Round 3 data validation failed");
   }
-
-  logger.info(`R4: Fetched and validated ${validationResult.data.items.length} drafts from R3.`, { runId });
-  return validationResult.data.items;
+  if (validationResult.data.items.length === 0) {
+    throw new HttpsError("failed-precondition", "R3 artifact has no items.");
+  }
+  return validationResult.data;
 }
 
-async function saveR4Polish(
+function buildPrompt(draftText: string): string {
+  return `\nSystem: You are a professional content editor. You will refine a draft blog post into polished, human-readable text of at least 100 words. Then, you will create a minimum of two relevant distribution formats (like social media posts, email snippets, or tweet threads). Where suitable, embed inline suggestions for images like [image: a photo of a robot writing at a desk].\n\nYour output must be a single, valid JSON object with the following structure: {\"polished\": \"...\", \"derivatives\": [\"...\", \"...\"]}. Do not include any text before or after the JSON object.\n\nUser: Here is the draft blog post. Please polish it and generate the derivatives.\n\nDraft:\n${draftText.trim()}\n`;
+}
+
+const polishGenerator = (prompt: string) => hfComplete(prompt, env.hfModelR4);
+
+async function polishSingleDraft(
+  item: z.infer<typeof Round3ItemSchema>,
   runId: string,
-  polishedItems: R4PolishedItem[],
-  failedItems: FailedDraft[],
-  db = getFirestore()
+  generator: (prompt: string) => Promise<string> = polishGenerator
+): Promise<z.infer<typeof PolishedDraftItemSchema>> {
+  const prompt = buildPrompt(item.draft);
+
+  let lastError: any;
+  for (let i = 0; i <= RETRIES; i++) {
+    try {
+      const rawText = await generator(prompt);
+      const jsonText = extractJsonFromText(rawText);
+      if (!jsonText) {
+        throw new Error("No valid JSON found in LLM response.");
+      }
+
+      const parsed = JSON.parse(jsonText);
+      const validationResult = LlmResponseSchema.safeParse(parsed);
+
+      if (!validationResult.success) {
+        throw new Error(`LLM response validation failed: ${validationResult.error.message}`);
+      }
+
+      return {
+        idea: item.idea,
+        polishedDraft: validationResult.data.polished,
+        derivatives: validationResult.data.derivatives,
+      };
+    } catch (error) {
+      lastError = error;
+      logger.warn(`Attempt ${i + 1} failed for polishing draft: "${item.idea}"`, { runId, error });
+    }
+  }
+  throw lastError; // Throw the last recorded error after all retries have failed
+}
+
+async function writeArtifacts(
+  runId: string,
+  successfulItems: z.infer<typeof PolishedDraftItemSchema>[],
+  failedItems: z.infer<typeof FailedItemSchema>[]
 ): Promise<void> {
-  if (polishedItems.length === 0 && failedItems.length === 0) {
-    logger.info("R4: No polished or failed items to save.", { runId });
+  if (successfulItems.length === 0 && failedItems.length === 0) {
+    logger.warn("No artifacts to write for Round 4.", { runId });
     return;
   }
 
-  logger.info(`R4: Saving ${polishedItems.length} polished items and ${failedItems.length} failures.`, { runId });
-
   const batch = db.batch();
 
-  if (polishedItems.length > 0) {
-    const outputForValidation: z.infer<typeof Round4OutputSchema> = {
-      items: polishedItems,
-    };
-    const validationResult = Round4OutputSchema.safeParse(outputForValidation);
-
+  // --- Write Successes ---
+  if (successfulItems.length > 0) {
+    const successPayload = { items: successfulItems };
+    const validationResult = Round4OutputSchema.safeParse(successPayload);
     if (!validationResult.success) {
-        logger.error("R4 output validation failed before saving", { runId, error: validationResult.error });
-        throw new Error("R4 output validation failed");
+      logger.error("Final Round 4 output validation failed", { runId, error: validationResult.error });
+      // Don't throw, as we still want to record failures
+    } else {
+      const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", runId);
+      batch.set(db.doc(successPath), {
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        ...validationResult.data,
+      });
     }
-
-    const successArtifactPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", runId);
-    const successRef = db.doc(successArtifactPath);
-    batch.set(successRef, {
-      ...validationResult.data,
-      createdAt: FieldValue.serverTimestamp(),
-    });
   }
 
+  // --- Write Failures ---
   if (failedItems.length > 0) {
-    const failureRef = db.doc(`runs/${runId}/artifacts/round4_failures`);
-    batch.set(failureRef, {
+    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", runId);
+    batch.set(db.doc(failurePath), {
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
       items: failedItems,
-      createdAt: FieldValue.serverTimestamp(),
     });
   }
 
   await batch.commit();
-  logger.info("R4: Successfully saved artifacts.", { runId });
 }
 
-// --- 3. CORE LOGIC ---
+// --- Main Function ------------------------------------------------------------
 
-async function processSingleDraft(
-  draftDoc: DraftItem,
-  llmApiCall: (prompt: string) => Promise<ResponseWrapper> = callHuggingFace
-): Promise<R4PolishedItem> {
-  const prompt = buildPrompt(draftDoc.draft);
-
-  let llmResponse: ResponseWrapper | null = null;
-  for (let i = 0; i <= RETRIES; i++) {
-    try {
-      const timeoutPromise = new Promise<ResponseWrapper>((_, reject) =>
-        setTimeout(() => reject(new Error("LLM call timed out")), DRAFT_TIMEOUT)
-      );
-      llmResponse = await Promise.race([llmApiCall(prompt), timeoutPromise]);
-      break; // Success
-    } catch (error: any) {
-      if (i === RETRIES) {
-        throw new Error(`LLM call failed after ${RETRIES} retries: ${error.message}`);
-      }
-    }
-  }
-
-  if (!llmResponse) {
-      throw new Error("LLM response was null after retries");
-  }
-
-  const llmOutput = await llmResponse.json(LlmResponseSchema);
-
-  const polishedItem: R4PolishedItem = {
-    idea: draftDoc.idea,
-    polishedDraft: llmOutput.polished,
-  };
-
-  return polishedItem;
-}
-
-// --- 4. API & UTILITY FUNCTIONS ---
-
-async function callHuggingFace(prompt: string): Promise<ResponseWrapper> {
-  const apiKey = env.hfToken;
-  const modelId = env.hfModelR4;
-
-  if (!apiKey || !modelId) {
-    throw new Error("Hugging Face API key or model for R4 is not set.");
-  }
-
-  const response = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ inputs: prompt, parameters: { max_new_tokens: 1024 } }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    logger.error("Hugging Face R4 API Error", { status: response.status, body: errorBody });
-    throw new Error(`Hugging Face R4 API Error: ${response.status} ${response.statusText}`);
-  }
-
-  return ResponseWrapper.create(response);
-}
-
-function buildPrompt(draftText: string): string {
-  return `
-System: You are a professional content editor. You will refine a draft blog post into polished, human-readable text of at least 100 words. Then, you will create a minimum of two relevant distribution formats (like social media posts, email snippets, or tweet threads). Where suitable, embed inline suggestions for images like [image: a photo of a robot writing at a desk].
-
-Your output must be a single, valid JSON object with the following structure: {"polished": "...", "derivatives": ["...", "..."]}. Do not include any text before or after the JSON object.
-
-User: Here is the draft blog post. Please polish it and generate the derivatives.
-
-Draft:
-${draftText.trim()}
-`;
-}
-
-// --- 5. MAIN ORCHESTRATION FUNCTION ---
-
-export async function Round4_Polish(
-  runId: string,
-  dependencies: {
-    llmApiCall?: (prompt: string) => Promise<ResponseWrapper>;
-    firestore?: any;
-  } = {}
+export async function runR4_Polish(
+  runId: string
 ): Promise<{ polishedCount: number; failures: number }> {
-  const db = dependencies.firestore || getFirestore();
-  logger.info(`R4: Starting Polish & Derive`, { runId });
+  logger.info(`Round ${ROUND}: Polish starting`, { runId });
 
-  try {
-    const drafts = await fetchR3Data(runId, db);
-    const validationResult = Round4InputSchema.safeParse({ items: drafts });
-    if (!validationResult.success) {
-        logger.error("R4 input validation failed", { runId, error: validationResult.error });
-        throw new Error("R4 input validation failed");
-    }
+  const { items: r3Items } = await getRound3Data(runId);
 
-    const limit = pLimit(CONCURRENCY);
-    const failedItems: FailedDraft[] = [];
+  const limit = pLimit(CONCURRENCY);
+  const successfulItems: z.infer<typeof PolishedDraftItemSchema>[] = [];
+  const failedItems: z.infer<typeof FailedItemSchema>[] = [];
 
-    const promises = validationResult.data.items.map((draft) =>
-      limit(async () => {
-        try {
-          const polishedItem = await processSingleDraft(draft, dependencies.llmApiCall);
-          return polishedItem;
-        } catch (error: any) {
-          logger.error(`R4: Failed to polish draft for idea: ${draft.idea}`, { runId, error: error.message });
-          failedItems.push({ draft, error: error.message, timestamp: Date.now() });
-          return null; // Indicate failure
-        }
-      })
-    );
+  const promises = r3Items.map((item) =>
+    limit(async () => {
+      try {
+        const polishedItem = await polishSingleDraft(item, runId);
+        successfulItems.push(polishedItem);
+      } catch (error: any) {
+        logger.error(`Failed to polish draft for "${item.idea}"`, { runId, error: error.message });
+        failedItems.push({ item, error: error.message });
+      }
+    })
+  );
 
-    const results = await Promise.all(promises);
-    const successfulItems = results.filter((item): item is R4PolishedItem => item !== null);
+  await Promise.all(promises);
 
-    await saveR4Polish(runId, successfulItems, failedItems, db);
+  await writeArtifacts(runId, successfulItems, failedItems);
 
-    logger.info(`R4: Finished. Successes: ${successfulItems.length}, Failures: ${failedItems.length}`, { runId });
-
-    return { polishedCount: successfulItems.length, failures: failedItems.length };
-  } catch (err: any) {
-    logger.error("R4: Critical error in main orchestration", { runId, message: err.message });
-    throw err; // Re-throw for the top-level handler
-  }
+  const result = { polishedCount: successfulItems.length, failures: failedItems.length };
+  logger.info(`Round ${ROUND}: Polish finished`, { runId, ...result });
+  return result;
 }
+
+export const Round4_Polish = onCall(
+  { timeoutSeconds: 540, memory: "512MiB", region: env.region },
+  (req) => {
+    const { runId } = req.data;
+    if (typeof runId !== "string" || !runId) {
+      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+    }
+    return runR4_Polish(runId);
+  }
+);
+
+// --- Exports for testing ------------------------------------------------------
+
+export const _test = {
+  buildPrompt,
+  polishSingleDraft,
+  runR4_Polish,
+};

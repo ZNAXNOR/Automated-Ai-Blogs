@@ -1,26 +1,21 @@
-import admin from 'firebase-admin';
-import fetch from 'node-fetch';
-import { z } from 'zod';
-import { env } from '../utils/config';
-import { logger } from '../utils/logger';
-import { ResponseWrapper } from '../utils/responseHelper';
-import { ARTIFACT_PATHS } from '../utils/constants';
+import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { z } from "zod";
+
+import { env } from "../utils/config";
+import { logger } from "../utils/logger";
+import { ARTIFACT_PATHS } from "../utils/constants";
+import { hfComplete } from "../clients/hf";
 import {
   Round1InputSchema,
   Round1OutputSchema,
-} from '../utils/schema';
+  type TrendItem,
+} from "../utils/schema";
+
+// --- Types and Schemas --------------------------------------------------------
 
 export type IdeationItem = z.infer<typeof Round1OutputSchema>["items"][number];
 
-const MAX_IDEAS_PER_TREND = 5;
-const MIN_IDEAS_PER_TREND = 3;
-const MAX_TOTAL_IDEAS = 60;
-
-if (!admin.apps.length) {
-  admin.initializeApp();
-}
-
-// Schema for the raw output from the LLM
 const LlmResponseSchema = z.array(
   z.object({
     trend: z.string(),
@@ -28,8 +23,45 @@ const LlmResponseSchema = z.array(
   })
 );
 
+// --- Constants ----------------------------------------------------------------
+
+const MAX_IDEAS_PER_TREND = 5;
+const MIN_IDEAS_PER_TREND = 3;
+const MAX_TOTAL_IDEAS = 60;
+const ROUND = 1;
+
+// --- Admin SDK ----------------------------------------------------------------
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
+const db = admin.firestore();
+
+// --- Helper Functions ---------------------------------------------------------
+
+async function getRound0Data(runId: string): Promise<TrendItem[]> {
+  const r0DocRef = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace("{runId}", runId));
+  const r0Snap = await r0DocRef.get();
+  if (!r0Snap.exists) {
+    throw new HttpsError("not-found", `Round0 artifact not found for runId=${runId}`);
+  }
+
+  const validationResult = Round1InputSchema.safeParse(r0Snap.data());
+  if (!validationResult.success) {
+    logger.error("Round 1 Input validation failed", { runId, error: validationResult.error });
+    throw new HttpsError("internal", "Round 1 Input validation failed");
+  }
+
+  const { items: trends } = validationResult.data;
+  if (trends.length === 0) {
+    throw new HttpsError("failed-precondition", `No trends found in round0 artifact for runId=${runId}`);
+  }
+
+  return trends;
+}
+
 function buildPrompt(trendQueries: string[]): string {
-  const prompt = `You are an expert blog strategist helping select article titles from trending topics.
+  return `You are an expert blog strategist helping select article titles from trending topics.
 
 TASK:
 - For each input trend, generate 3–5 unique, creative blog title ideas.
@@ -42,8 +74,7 @@ OUTPUT FORMAT (strict JSON only):
   {
     "trend": "<trend string>",
     "ideas": ["<title1>", "<title2>", "<title3>"]
-  },
-  ...
+  }
 ]
 
 EXAMPLE:
@@ -62,166 +93,104 @@ Output:
 
 Input: ${JSON.stringify(trendQueries)}
 `;
-  return prompt;
 }
 
-async function callHuggingFace(prompt: string): Promise<ResponseWrapper> {
-  const hfToken = env.hfToken;
-  const HF_MODEL = env.hfModelR1;
+async function generateIdeas(trendQueries: string[]): Promise<z.infer<typeof LlmResponseSchema>> {
+  const prompt = buildPrompt(trendQueries);
+  const llmResponse = await hfComplete(prompt, env.hfModelR1);
 
-  if (!hfToken) {
-    throw new Error('HF_TOKEN environment variable is not set.');
+  try {
+    const parsed = JSON.parse(llmResponse.trim());
+    return LlmResponseSchema.parse(parsed);
+  } catch (error) {
+    logger.error("Failed to parse LLM response", { llmResponse, error });
+    throw new HttpsError("internal", "Failed to parse LLM response", { error });
   }
-  if (!HF_MODEL || HF_MODEL.includes('<set-your-model')) {
-    throw new Error(
-      'HUGGINGFACE_MODEL environment variable is not set to a valid model slug.'
-    );
-  }
-
-  const HF_ENDPOINT = `https://api-inference.huggingface.co/models/${HF_MODEL}`;
-
-  const payload = {
-    inputs: prompt,
-    parameters: {
-      max_new_tokens: 512,
-      return_full_text: true,
-    },
-  };
-
-  const res = await fetch(HF_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${hfToken}`,
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    logger.error('Hugging Face API error', { status: res.status, text });
-    throw new Error(`Hugging Face API error: ${res.status} ${res.statusText} - ${text}`);
-  }
-
-  return ResponseWrapper.create(res);
 }
 
-function mapToIdeationItems(parsed: z.infer<typeof LlmResponseSchema>): IdeationItem[] {
+function processLlmResponse(llmOutput: z.infer<typeof LlmResponseSchema>, trendQueries: string[]): IdeationItem[] {
   const items: IdeationItem[] = [];
-  for (const entry of parsed) {
-    const trend = String(entry.trend ?? '').trim();
-    const ideas = Array.isArray(entry.ideas) ? entry.ideas : [];
+  const trendsMap = new Map<string, number>();
 
+  for (const entry of llmOutput) {
+    const trend = String(entry.trend ?? "").trim();
     if (!trend) continue;
-    const cleanedIdeas = ideas
-      .map((s: any) => String(s ?? '').trim())
-      .filter((s: string) => s.length > 0)
+
+    const cleanedIdeas = (entry.ideas ?? [])
+      .map((s) => String(s ?? "").trim())
+      .filter(Boolean)
       .slice(0, MAX_IDEAS_PER_TREND);
 
-    if (cleanedIdeas.length < MIN_IDEAS_PER_TREND) {
-      continue;
-    }
+    if (cleanedIdeas.length < MIN_IDEAS_PER_TREND) continue;
 
-    cleanedIdeas.forEach((idea: string, idx: number) => {
-      items.push({
-        trend,
-        idea,
-        variant: idx + 1,
-        source: 'llm',
-      });
+    cleanedIdeas.forEach((idea, idx) => {
+      items.push({ trend, idea, variant: idx + 1, source: "llm" });
+      trendsMap.set(trend, (trendsMap.get(trend) || 0) + 1);
     });
   }
 
-  if (items.length > MAX_TOTAL_IDEAS) {
-    items.splice(MAX_TOTAL_IDEAS);
-  }
-
-  return items.filter((it) => it.idea.trim().length > 0);
-}
-
-export async function Round1_Ideate(runId: string): Promise<{ wrote: number }> {
-  logger.info('Round 1: Ideate starting', { runId });
-  if (!runId) throw new Error('runId is required');
-
-  const db = admin.firestore();
-
-  const r0DocRef = db.collection('runs').doc(runId).collection('artifacts').doc('round0');
-  const r0Snap = await r0DocRef.get();
-  if (!r0Snap.exists) {
-    logger.error('Round0 artifact not found', { runId });
-    throw new Error(`Round0 artifact not found for runId=${runId} at runs/${runId}/artifacts/round0`);
-  }
-
-  const r0Data = r0Snap.data() || {};
-
-  const validationResult = Round1InputSchema.safeParse(r0Data);
-  if (!validationResult.success) {
-    logger.error('Round 1 Input validation failed', {
-      runId,
-      error: validationResult.error,
-    });
-    throw new Error('Round 1 Input validation failed');
-  }
-
-  const { items: trendsFromDoc } = validationResult.data;
-
-  if (!Array.isArray(trendsFromDoc) || trendsFromDoc.length === 0) {
-    throw new Error(`No trends found in round0 artifact for runId=${runId}`);
-  }
-
-  const trendQueries = Array.from(
-    new Set(trendsFromDoc.map((t) => String(t.query ?? '').trim()).filter((s) => s.length > 0))
-  ).slice(0, 12);
-
-  if (trendQueries.length === 0) {
-    throw new Error('After normalization, no valid trend queries were found.');
-  }
-
-  const prompt = buildPrompt(trendQueries);
-
-  const hfResponse = await callHuggingFace(prompt);
-  const parsed = await hfResponse.json(LlmResponseSchema);
-
-  const ideationItems = mapToIdeationItems(parsed);
-
-  if (ideationItems.length === 0) {
-    throw new Error('No valid ideation items produced by LLM.');
-  }
-
-  const trendsMap = new Map<string, number>();
-  for (const it of ideationItems) {
-    trendsMap.set(it.trend, (trendsMap.get(it.trend) || 0) + 1);
-  }
-
+  // Verify all original trends were processed sufficiently
   for (const t of trendQueries) {
     const count = trendsMap.get(t) || 0;
     if (count < MIN_IDEAS_PER_TREND) {
-      throw new Error(`Trend \"${t}\" produced fewer than ${MIN_IDEAS_PER_TREND} ideas (${count}).`);
+      throw new HttpsError("internal", `Trend "${t}" produced fewer than ${MIN_IDEAS_PER_TREND} ideas (${count}).`);
     }
   }
 
-  const outputForValidation: z.infer<typeof Round1OutputSchema> = {
-    items: ideationItems,
-  };
-  const outputValidationResult = Round1OutputSchema.safeParse(outputForValidation);
+  return items.slice(0, MAX_TOTAL_IDEAS);
+}
 
-  if (!outputValidationResult.success) {
-    logger.error('Round 1 Output validation failed', {
-      runId,
-      error: outputValidationResult.error,
-    });
-    throw new Error('Round 1 Output validation failed');
+async function writeArtifact(runId: string, items: IdeationItem[]): Promise<void> {
+  const payload = { items };
+  const validationResult = Round1OutputSchema.safeParse(payload);
+
+  if (!validationResult.success) {
+    logger.error("Round 1 Output validation failed", { runId, error: validationResult.error });
+    throw new HttpsError("internal", "Round 1 Output validation failed");
   }
 
-  const r1ArtifactPath = ARTIFACT_PATHS.R1_IDEATION.replace('{runId}', runId);
-  const r1DocRef = db.doc(r1ArtifactPath);
-
-  await r1DocRef.set({
+  const r1ArtifactPath = ARTIFACT_PATHS.R1_IDEATION.replace("{runId}", runId);
+  await db.doc(r1ArtifactPath).set({
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    ...outputValidationResult.data,
+    ...validationResult.data,
   });
+}
 
-  logger.info('Round 1: Ideate finished', { runId, wrote: ideationItems.length });
+// --- Main Function ------------------------------------------------------------
+
+async function runR1_Ideate(runId: string) {
+  logger.info(`Round ${ROUND}: Ideate starting`, { runId });
+
+  const trendsFromDoc = await getRound0Data(runId);
+
+  const trendQueries = Array.from(
+    new Set(trendsFromDoc.map((t) => t.query.trim()).filter(Boolean))
+  ).slice(0, 12);
+
+  if (trendQueries.length === 0) {
+    throw new HttpsError("failed-precondition", "After normalization, no valid trend queries were found.");
+  }
+
+  const llmOutput = await generateIdeas(trendQueries);
+  const ideationItems = processLlmResponse(llmOutput, trendQueries);
+
+  if (ideationItems.length === 0) {
+    throw new HttpsError("internal", "No valid ideation items were produced.");
+  }
+
+  await writeArtifact(runId, ideationItems);
+
+  logger.info(`Round ${ROUND}: Ideate finished`, { runId, wrote: ideationItems.length });
   return { wrote: ideationItems.length };
 }
+
+export const Round1_Ideate = onCall(
+  { timeoutSeconds: 180, memory: "256MiB", region: env.region },
+  (req) => {
+    const { runId } = req.data;
+    if (typeof runId !== 'string' || !runId) {
+      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+    }
+    return runR1_Ideate(runId);
+  }
+);

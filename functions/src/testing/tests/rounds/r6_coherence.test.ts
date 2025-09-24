@@ -1,104 +1,114 @@
-jest.mock("node-fetch", () => jest.fn());
-
-import { Round6_Coherence } from "../../../rounds/r6_coherence";
-
-import fetch from "node-fetch";
-const mockedFetch = fetch as unknown as jest.Mock;
-
-// Mock environment variables
-jest.mock("../../../utils/config", () => ({
-  env: {
-    hfToken: "test-token",
-    hfModelR6: "test-model",
-  },
+const mockSet = jest.fn();
+const mockGet = jest.fn();
+const mockDoc = jest.fn((path) => ({ get: mockGet, set: mockSet, path }));
+const mockBatchCommit = jest.fn();
+const mockBatchSet = jest.fn();
+const mockBatch = jest.fn(() => ({
+  commit: mockBatchCommit,
+  set: mockBatchSet,
 }));
 
-
-// --- Mocking Firestore -- -
-const firestoreWrites: { [key: string]: any } = {};
-const collectionGetMock = jest.fn().mockResolvedValue({
-    empty: false,
-    docs: [
-        {
-            id: 'draft1',
-            data: () => ({
-                polished: 'This is the first polished draft.',
-                derivatives: ['derivative A', 'derivative B'],
-            }),
-        },
-        {
-            id: 'draft2',
-            data: () => ({
-                polished: 'This is the second polished draft.',
-                derivatives: ['derivative C', 'derivative D'],
-            }),
-        },
-    ],
-});
-
-const batchSetMock = jest.fn((docRef, data) => {
-    firestoreWrites[docRef.path] = data;
-});
-const batchCommitMock = jest.fn().mockResolvedValue(undefined);
-
-const collectionMock = jest.fn((path: string) => {
-    if (path.includes("round4_distribution")) {
-        return {
-            get: collectionGetMock
-        };
-    }
-    return {
-        doc: (docId: string) => ({
-            path: `${path}/${docId}`,
-        }),
-    }
-});
-
-jest.mock("firebase-admin/firestore", () => ({
-    getFirestore: () => ({
-        collection: collectionMock,
-        batch: () => ({
-            set: batchSetMock,
-            commit: batchCommitMock,
-        }),
+jest.mock("firebase-admin", () => ({
+  apps: [],
+  initializeApp: jest.fn(),
+  firestore: Object.assign(
+    () => ({
+      doc: mockDoc,
+      batch: mockBatch,
     }),
-    FieldValue: {
-        serverTimestamp: () => 'mock-server-timestamp',
-    },
+    {
+      FieldValue: {
+        serverTimestamp: jest.fn(() => "MOCK_TIMESTAMP"),
+      },
+    }
+  ),
 }));
 
+jest.mock("../../../clients/hf_sentence", () => ({
+  __esModule: true,
+  calculateSimilarity: jest.fn(),
+}));
 
-describe("r6_coherence Core Functionality & Firestore Writes", () => {
+import { _test as Round6_Coherence } from "../../../rounds/r6_coherence";
+import * as hfSentence from "../../../clients/hf_sentence";
+import { HttpsError } from "firebase-functions/v2/https";
+import { ARTIFACT_PATHS } from "../../../utils/constants";
 
-    beforeEach(() => {
-        jest.clearAllMocks();
-        mockedFetch.mockReset();
-        for (const key in firestoreWrites) {
-            delete firestoreWrites[key];
-        }
-    });
+const mockCalculateSimilarity = hfSentence.calculateSimilarity as jest.Mock;
 
-    it("should calculate coherence, save to Firestore, and match snapshot", async () => {
-        mockedFetch.mockResolvedValue({
-            ok: true,
-            json: async () => [0.9, 0.95],
-        });
+const RUN_ID = "test-run-coherence-456";
 
-        const runId = "test-run-for-snapshot";
-        await Round6_Coherence(runId);
+const MOCK_R4_DATA = {
+  items: [
+    {
+      idea: "The Future of Transportation",
+      polishedDraft: "Autonomous vehicles are set to revolutionize how we travel...",
+      derivatives: [
+        "Self-driving cars are the future! #tramsportation",
+        "Get ready for a world with no traffic jams, thanks to autonomous vehicles.",
+      ],
+    },
+    {
+      idea: "The Rise of Superfoods",
+      polishedDraft: "From kale to quinoa, superfoods are taking over our kitchens...",
+      derivatives: [
+        "Supercharge your diet with these amazing superfoods! #health",
+        "Discover the benefits of adding nutrient-dense foods to your meals.",
+      ],
+    },
+  ],
+};
 
-        expect(collectionMock).toHaveBeenCalledWith(`runs/${runId}/artifacts/round4_distribution`);
-        expect(fetch).toHaveBeenCalledTimes(2);
-        expect(batchCommitMock).toHaveBeenCalledTimes(1);
+describe("runR6_Coherence", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R4_DATA });
+  });
 
-        // Sort keys to ensure consistent snapshot
-        const sortedWrites = Object.keys(firestoreWrites).sort().reduce(
-            (acc, key) => {
-                acc[key] = firestoreWrites[key];
-                return acc;
-            }, {} as { [key: string]: any }
-        );
+  it("should calculate coherence for all drafts successfully", async () => {
+    mockCalculateSimilarity.mockResolvedValue([0.9, 0.85]);
 
-        expect(sortedWrites).toMatchSnapshot();
-    });
+    const result = await Round6_Coherence.runR6_Coherence(RUN_ID);
+
+    expect(result).toEqual({ coherenceCount: 2, failures: 0 });
+    expect(mockCalculateSimilarity).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const successPath = ARTIFACT_PATHS.R6_COHERENCE.replace("{runId}", RUN_ID);
+    const writtenData = mockBatchSet.mock.calls[0][1];
+    expect(mockDoc).toHaveBeenCalledWith(successPath);
+    expect(writtenData.items).toHaveLength(2);
+    expect(writtenData.items[0].idea).toBe("The Future of Transportation");
+    expect(writtenData.items[0].coherenceScore).toBeCloseTo(0.875);
+  });
+
+  it("should handle a mix of successful and failed coherence calculations", async () => {
+    mockCalculateSimilarity
+      .mockResolvedValueOnce([0.95, 0.92])
+      .mockRejectedValueOnce(new Error("HF is down"));
+
+    const result = await Round6_Coherence.runR6_Coherence(RUN_ID);
+
+    expect(result).toEqual({ coherenceCount: 1, failures: 1 });
+    expect(mockCalculateSimilarity).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+  });
+
+  it("should throw not-found if the R4 artifact does not exist", async () => {
+    mockGet.mockResolvedValue({ exists: false });
+
+    await expect(Round6_Coherence.runR6_Coherence(RUN_ID)).rejects.toThrow(
+      new HttpsError("not-found", `Round 4 artifact not found for runId=${RUN_ID}`)
+    );
+  });
+
+  it("should handle the case where all coherence calculations fail", async () => {
+    mockCalculateSimilarity.mockRejectedValue(new Error("HF is completely down"));
+
+    const result = await Round6_Coherence.runR6_Coherence(RUN_ID);
+
+    expect(result).toEqual({ coherenceCount: 0, failures: 2 });
+    expect(mockBatchSet).not.toHaveBeenCalled();
+  });
 });

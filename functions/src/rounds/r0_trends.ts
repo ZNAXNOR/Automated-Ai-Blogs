@@ -1,4 +1,4 @@
-/* 
+/*
  * Deterministic, zero-cost by default. Optionally prunes/scores via a tiny HF model.
  *
  * Inputs:
@@ -20,28 +20,21 @@ import * as admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import { onCall } from "firebase-functions/v2/https";
 import { FieldValue } from "firebase-admin/firestore";
+import * as crypto from "crypto";
+
 import { env } from "../utils/config";
 import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } from "../clients/serp";
 import { getCache, setCache } from "../utils/cache";
-import * as crypto from "crypto";
+import { Round0InputSchema, Round0OutputSchema } from "../utils/schema";
+import type { TrendItem, Round0Input } from "../utils/schema";
+import { ARTIFACT_PATHS } from "../utils/constants";
+import { logger } from "../utils/logger";
+import { ResponseWrapper } from "../utils/responseHelper";
+import fetch from "node-fetch";
 
-// --- Types -------------------------------------------------------------------
 
-export interface TrendItem {
-  query: string; // normalized short query
-  type: "autocomplete" | "related" | "trending" | "rss";
-  score: number; // 0..1
-  source: string[]; // e.g., ["serp:autocomplete","rss:theverge"]
-  reason?: string; // <= 12 words
-}
-
-interface Round0Input {
-  runId: string;
-  seeds: string[];
-  region?: string;
-  useLLM?: boolean;
-  force?: boolean;
-}
+// Re-export TrendItem for test file
+export type { TrendItem } from '../utils/schema';
 
 type SourceBucket = {
   type: TrendItem["type"];
@@ -67,31 +60,12 @@ const RSS_SOURCES: { name: string; url: string }[] = [
 
 const ROUND = 0;
 
-function logStep(runId: string, step: string, startMs: number) {
-  const durationMs = Date.now() - startMs;
-  console.log(JSON.stringify({ runId, round: ROUND, step, durationMs }));
-}
-
-function assertInput(i: any): asserts i is Round0Input {
-  if (!i || typeof i !== "object") throw new HttpsError("invalid-argument", "Input must be an object");
-  if (!i.runId || typeof i.runId !== "string") throw new HttpsError("invalid-argument", "runId is required");
-  if (!Array.isArray(i.seeds) || i.seeds.some((s: string) => typeof s !== "string")) {
-    throw new HttpsError("invalid-argument", "seeds must be a string[]");
-  }
-  if (i.region && typeof i.region !== "string") {
-    throw new HttpsError("invalid-argument", "region must be a string");
-  }
-  if (i.useLLM !== undefined && typeof i.useLLM !== "boolean") {
-    throw new HttpsError("invalid-argument", "useLLM must be boolean");
-  }
-}
-
 function sha256(str: string) {
   return crypto.createHash("sha256").update(str, "utf8").digest("hex");
 }
 
 function stripPunctKeepSymbols(s: string): string {
-  return s.replace(/[!"$%&'()*.,\/:;<=>?@\[\\\]^_`{|}~]/g, " ");
+  return s.replace(/[!\"$%&'()*.,\/:;<=>?@\[\\\]^_`{|}~]/g, " ");
 }
 
 export function normalizeQuery(raw: string): string {
@@ -192,7 +166,7 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
     boosted.sort((a, b) => (b.score - a.score) || (a.query.length - b.query.length));
     return boosted.slice(0, 12);
   } catch (e) {
-    console.warn("LLM prune skipped due to error:", e);
+    logger.warn("LLM prune skipped due to error:", e);
     return items;
   }
 }
@@ -200,11 +174,12 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
 async function fetchRssTitles(url: string, limit = 20): Promise<string[]> {
   try {
     const res = await fetch(url, { method: "GET", redirect: "follow" });
+    const responseWrapper = ResponseWrapper.create(res as any);
     if (!res.ok) {
-      console.warn(`Failed to fetch RSS feed from ${url}, status: ${res.status}`);
+      logger.warn(`Failed to fetch RSS feed from ${url}, status: ${res.status}`);
       return [];
     }
-    const text = await res.text();
+    const text = await responseWrapper.text();
     const titles: string[] = [];
     const itemRegex = /<(?:item|entry)>([\s\S]*?)<\/(?:item|entry)>/gi;
     let match;
@@ -218,7 +193,7 @@ async function fetchRssTitles(url: string, limit = 20): Promise<string[]> {
           .replace(/<[^>]+>/g, "")
           .replace(/&amp;/g, "&")
           .replace(/&quot;/g, '"')
-          .replace(/&apos;/g, "'")
+          .replace(/&apos;/g, "\'")
           .replace(/&lt;/g, "<")
           .replace(/&gt;/g, ">")
           .replace(/\s+/g, " ")
@@ -228,10 +203,10 @@ async function fetchRssTitles(url: string, limit = 20): Promise<string[]> {
         }
       }
     }
-    console.log(`Found ${titles.length} titles from ${url}`);
+    logger.info(`Found ${titles.length} titles from ${url}`);
     return titles;
   } catch (error) {
-    console.warn(`Error fetching or parsing RSS feed from ${url}:`, error);
+    logger.warn(`Error fetching or parsing RSS feed from ${url}:`, error);
     return [];
   }
 }
@@ -310,28 +285,51 @@ export function deterministicProcess(
 }
 
 async function getExistingArtifact(runId: string) {
-  const ref = db.collection("runs").doc(runId).collection("artifacts").doc("round0");
+  const ref = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
   const snap = await ref.get();
   return snap.exists ? snap.data() : null;
 }
 
-async function writeArtifact(runId: string, payload: any) {
-  const ref = db.collection("runs").doc(runId).collection("artifacts").doc("round0");
-  await ref.set({
-    ...payload,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+async function writeArtifact(runId:string, payload: any) {
+    const parsed = Round0OutputSchema.safeParse(payload);
+    if (!parsed.success) {
+        logger.error(`Round 0 output validation failed for runId: ${runId}`, { error: parsed.error });
+        throw new HttpsError("internal", "Round 0 output validation failed", { error: parsed.error });
+    }
+    const ref = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
+    await ref.set({
+        ...parsed.data,
+        createdAt: FieldValue.serverTimestamp(),
+    });
 }
 
-export async function runR0_Trends(input: Round0Input) {
+// Helper to fetch and cache a single SERP API call
+async function getCachedSerp(key: string, fetcher: () => Promise<string[]>): Promise<{ list: string[], fromCache: boolean }> {
+    const cacheKey = `serpapi:${sha256(key)}`;
+    const cached = await getCache(cacheKey);
+    if (cached?.payload) {
+        return { list: cached.payload, fromCache: true };
+    }
+    const list = await fetcher();
+    await setCache(cacheKey, list, env.CACHE_TTL_HOURS);
+    return { list, fromCache: false };
+}
+
+export async function runR0_Trends(input: any) {
     const t0 = Date.now();
-    assertInput(input);
-    const { runId, seeds, region, useLLM, force } = input;
+
+    const validation = Round0InputSchema.safeParse(input);
+    if (!validation.success) {
+        logger.error(`Round 0 input validation failed`, { error: validation.error });
+        throw new HttpsError("invalid-argument", "Invalid input", { error: validation.error.format() });
+    }
+    const { runId, seeds, region, useLLM, force } = validation.data;
+    logger.info(`Starting Round 0 for runId: ${runId}`, { runId });
 
     if (!force) {
       const existing = await getExistingArtifact(runId);
       if (existing) {
-        logStep(runId, "idempotent-return", t0);
+        logger.info(`Round 0 idempotent return for runId: ${runId}`, { runId });
         return existing;
       }
     }
@@ -339,100 +337,65 @@ export async function runR0_Trends(input: Round0Input) {
     const tSerp = Date.now();
     const buckets: SourceBucket[] = [];
     let usedSerp = false;
-    let serpCacheHit = false;
+    let anyCacheMiss = false;
 
     if (serpAvailable()) {
       usedSerp = true;
       const dayBucket = new Date().toISOString().slice(0, 10);
       const baseKey = JSON.stringify({ seeds, region, day: dayBucket });
 
-      {
-        const cacheKey = `serpapi:${sha256(baseKey + ":autocomplete")}`;
-        const cached = await getCache(cacheKey);
-        let list: string[];
-        if (cached?.payload) {
-          list = cached.payload;
-          serpCacheHit = true;
-        } else {
-          list = await getSerpSuggestions(seeds, region);
-          await setCache(cacheKey, list, env.CACHE_TTL_HOURS);
-        }
-        buckets.push({ type: "autocomplete", sourceName: "serp:autocomplete", items: list });
-      }
-      {
-        const cacheKey = `serpapi:${sha256(baseKey + ":related")}`;
-        const cached = await getCache(cacheKey);
-        let list: string[];
-        if (cached?.payload) {
-          list = cached.payload;
-          serpCacheHit = true;
-        } else {
-          list = await getSerpRelated(seeds, region);
-          await setCache(cacheKey, list, env.CACHE_TTL_HOURS);
-        }
-        buckets.push({ type: "related", sourceName: "serp:related", items: list });
-      }
-      {
-        const cacheKey = `serpapi:${sha256(baseKey + ":trending")}`;
-        const cached = await getCache(cacheKey);
-        let list: string[];
-        if (cached?.payload) {
-          list = cached.payload;
-          serpCacheHit = true;
-        } else {
-          list = await getSerpTrending(region);
-          await setCache(cacheKey, list, env.CACHE_TTL_HOURS);
-        }
-        buckets.push({ type: "trending", sourceName: "serp:trending", items: list });
+      const [autocomplete, related, trending] = await Promise.all([
+          getCachedSerp(baseKey + ":autocomplete", () => getSerpSuggestions(seeds, region)),
+          getCachedSerp(baseKey + ":related", () => getSerpRelated(seeds, region)),
+          getCachedSerp(baseKey + ":trending", () => getSerpTrending(region)),
+      ]);
+
+      buckets.push({ type: "autocomplete", sourceName: "serp:autocomplete", items: autocomplete.list });
+      buckets.push({ type: "related", sourceName: "serp:related", items: related.list });
+      buckets.push({ type: "trending", sourceName: "serp:trending", items: trending.list });
+
+      if (!autocomplete.fromCache || !related.fromCache || !trending.fromCache) {
+          anyCacheMiss = true;
       }
     }
 
     const tRss = Date.now();
-    for (const src of RSS_SOURCES) {
-      try {
-        const titles = await fetchRssTitles(src.url, 20);
-        buckets.push({ type: "rss", sourceName: src.name, items: titles });
-      } catch (e) {
-        console.warn(`RSS fetch error for ${src.name}`, e);
-      }
-    }
-    logStep(runId, "fetch-sources", tSerp);
+    const rssResults = await Promise.allSettled(
+        RSS_SOURCES.map(src => fetchRssTitles(src.url, 20).then(titles => ({ type: "rss" as const, sourceName: src.name, items: titles })))
+    );
+
+    rssResults.forEach(result => {
+        if (result.status === 'fulfilled') {
+            buckets.push(result.value);
+        } else {
+            logger.warn(`RSS fetch failed`, { error: result.reason });
+        }
+    });
+
+    logger.info(`Fetched sources for runId: ${runId}`, { runId, round: ROUND, durationMs: Date.now() - tSerp });
 
     const tDet = Date.now();
     const { items: detItems, sourceCounts } = deterministicProcess(buckets);
-    logStep(runId, "deterministic", tDet);
+    logger.info(`Deterministic processing complete for runId: ${runId}`, { runId, count: detItems.length, durationMs: Date.now() - tDet });
 
     const tLlm = Date.now();
     const finalItems = await optionalLlmPrune(detItems, useLLM);
-    logStep(runId, "optional-llm", tLlm);
-
-    for (const i of finalItems) {
-      if (!i.query || typeof i.query !== "string") throw new HttpsError("internal", "Invalid item.query");
-      if (!["autocomplete", "related", "trending", "rss"].includes(i.type)) {
-        throw new HttpsError("internal", "Invalid item.type");
-      }
-      if (typeof i.score !== "number" || i.score < 0 || i.score > 1) {
-        throw new HttpsError("internal", "Invalid item.score");
-      }
-      if (!Array.isArray(i.source)) throw new HttpsError("internal", "Invalid item.source");
-      if (i.reason && i.reason.split(/\s+/).length > 12) {
-        throw new HttpsError("internal", "Invalid item.reason length");
-      }
-    }
+    logger.info(`Optional LLM pruning complete for runId: ${runId}`, { runId, count: finalItems.length, durationMs: Date.now() - tLlm });
 
     const artifact = {
       items: finalItems,
-      cached: serpCacheHit,
+      cached: usedSerp && !anyCacheMiss,
       sourceCounts,
     };
+
     await writeArtifact(runId, artifact);
 
-    logStep(runId, "done", t0);
+    logger.info(`Finished Round 0 for runId: ${runId}`, { runId, durationMs: Date.now() - t0 });
     return artifact;
 }
 
 export const Round0_Trends = onCall(
-  { timeoutSeconds: 300, memory: "256MiB" },
+  { timeoutSeconds: 300, memory: "256MiB", region: env.region },
   (req) => runR0_Trends(req.data)
 );
 

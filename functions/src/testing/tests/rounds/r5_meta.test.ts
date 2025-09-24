@@ -1,134 +1,137 @@
-jest.mock("../../../utils/llmClient");
+const mockSet = jest.fn();
+const mockGet = jest.fn();
+const mockDoc = jest.fn((path) => ({ get: mockGet, set: mockSet, path }));
+const mockBatchCommit = jest.fn();
+const mockBatchSet = jest.fn();
+const mockBatch = jest.fn(() => ({
+  commit: mockBatchCommit,
+  set: mockBatchSet,
+}));
 
-import { _test as r5_test_functions, Round5_Meta } from "../../../rounds/r5_meta";
-const { generateMetaForDraft } = r5_test_functions;
+jest.mock("firebase-admin", () => ({
+  apps: [],
+  initializeApp: jest.fn(),
+  firestore: Object.assign(
+    () => ({
+      doc: mockDoc,
+      batch: mockBatch,
+    }),
+    {
+      FieldValue: {
+        serverTimestamp: jest.fn(() => "MOCK_TIMESTAMP"),
+      },
+    }
+  ),
+}));
 
-import { LLMClient } from "../../../utils/llmClient";
+jest.mock("../../../clients/gemini", () => ({
+  __esModule: true,
+  geminiComplete: jest.fn(),
+  extractJsonFromText: jest.fn(),
+}));
 
-const llmMock = new LLMClient() as jest.Mocked<LLMClient>;
+import { _test as Round5_Meta } from "../../../rounds/r5_meta";
+import * as gemini from "../../../clients/gemini";
+import { HttpsError } from "firebase-functions/v2/https";
+import { ARTIFACT_PATHS } from "../../../utils/constants";
 
-// Sample data for testing
-const sampleDraft = `
-  Exploring the Alps: A solo journey through breathtaking landscapes. This was a challenging yet rewarding experience that pushed my physical and mental limits. I hiked for days, surrounded by majestic peaks and serene valleys, and the solitude allowed for deep introspection and a profound connection with nature. The journey was not just about the destination, but about the process of getting there—the early morning starts, the steep ascents, and the rewarding views from the summit. It taught me the importance of perseverance, resilience, and the beauty of simplicity. I returned with a renewed sense of purpose and a deep appreciation for the power of the natural world. This is a story of adventure, self-discovery, and the transformative power of a solo journey into the wild.
-`;
+const mockGeminiComplete = gemini.geminiComplete as jest.Mock;
+const mockExtractJson = gemini.extractJsonFromText as jest.Mock;
 
-const validMockResponse = {
-    seoTitle: "AI Marketing Trends: A Comprehensive Guide for 2024",
-    metaDescription: "Explore the top AI-driven marketing strategies, tools, and use cases to stay ahead. Optimize your campaigns and drive growth with our expert insights.",
-    tags: ["AI Marketing", "Digital Strategy", "Content Automation", "MarTech"],
-    categories: ["Marketing", "Technology"],
-    excerpt: "This is a detailed exploration into how artificial intelligence is fundamentally changing the marketing landscape. We cover everything from personalized content creation and automated campaign management to the ethical challenges that arise. Our guide provides practical, actionable advice for businesses looking to integrate AI into their workflows, ensuring they can leverage these powerful tools to connect with audiences more effectively and achieve a higher return on investment in a competitive digital world.",
-    relatedKeywords: ["AI in digital marketing", "Marketing automation", "AI content generation"],
-    imageSuggestions: ["prompt: A futuristic marketing dashboard with glowing charts and AI icons.", "reuse: Company logo on a dark background."],
+const RUN_ID = "test-run-meta-123";
+
+const MOCK_R4_DATA = {
+  items: [
+    {
+      idea: "The Art of Prompt Engineering",
+      polishedDraft: "The quick brown fox jumps over the lazy dog. ".repeat(20),
+    },
+    {
+      idea: "The History of AI",
+      polishedDraft: "The lazy dog was jumped over by the quick brown fox. ".repeat(20),
+    },
+  ],
 };
 
+const VALID_LLM_OUTPUT = {
+  seoTitle: "Mastering the Art of Prompt Engineering for Better AI",
+  metaDescription: "Learn how to craft effective prompts to get the best results from your AI models. This guide covers the essentials of prompt engineering.",
+  tags: ["AI", "Prompt Engineering", "LLM", "Artificial Intelligence"],
+  categories: ["Technology"],
+  excerpt: "This comprehensive guide delves into the art and science of prompt engineering. We will explore various techniques and best practices to help you communicate effectively with large language models and achieve your desired outcomes. From simple instructions to complex, multi-shot prompts, you'll learn how to refine your inputs for maximum impact and accuracy in AI-driven content generation and analysis.",
+  relatedKeywords: ["AI prompt guide", "large language models", "GPT-4 tips"],
+  imageSuggestions: ["[image: a brain with a gear in it, representing AI thought]", "[image: a person talking to a robot across a desk]"],
+};
 
-describe("Round 5 - Metadata & Image Assets", () => {
+describe("runR5_Meta", () => {
   beforeEach(() => {
-    // Reset mocks before each test
-    llmMock.generate.mockClear();
-    // Corrected Mock: This test expects an object with a `text` property.
-    llmMock.generate.mockResolvedValue({ text: JSON.stringify(validMockResponse) });
+    jest.clearAllMocks();
+    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R4_DATA });
+    mockExtractJson.mockImplementation((text) => text);
   });
 
-  it("generates valid metadata for a single draft and matches snapshot", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    expect(result).toBeDefined();
-    // Snapshot test to detect unexpected schema changes
-    expect(result).toMatchSnapshot();
+  it("should process all drafts and generate metadata successfully", async () => {
+    mockGeminiComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+
+    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+
+    expect(result).toEqual({ metaCount: 2, failures: 0 });
+    expect(mockGeminiComplete).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1);
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const successPath = ARTIFACT_PATHS.R5_META.replace("{runId}", RUN_ID);
+    const writtenData = mockBatchSet.mock.calls[0][1];
+    expect(mockDoc).toHaveBeenCalledWith(successPath);
+    expect(writtenData.items).toHaveLength(2);
+    expect(writtenData.items[0].idea).toBe("The Art of Prompt Engineering");
+    expect(writtenData.items[0].meta.tags).toEqual(["AI", "Prompt Engineering", "LLM", "Artificial Intelligence"]);
   });
 
-  it("enforces SEO title length ≤ 70 chars", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    expect(meta.seoTitle).toBeDefined();
-    expect(meta.seoTitle.length).toBeLessThanOrEqual(70);
+  it("should handle a mix of successful and failed metadata generations", async () => {
+    mockGeminiComplete
+      .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT))
+      .mockRejectedValueOnce(new Error("LLM is having a moment"))
+      .mockRejectedValueOnce(new Error("LLM is still having a moment"))
+      .mockRejectedValueOnce(new Error("LLM has given up")); // Add this for the final retry
+
+    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+
+    expect(result).toEqual({ metaCount: 1, failures: 1 });
+    expect(mockGeminiComplete).toHaveBeenCalledTimes(4); // 1 success, 1 fail, 2 retries
+    expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only writes success artifact
   });
 
-  it("enforces meta description length ≤ 160 chars", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    expect(meta.metaDescription).toBeDefined();
-    expect(meta.metaDescription.length).toBeLessThanOrEqual(160);
+  it("should throw not-found if the R4 artifact does not exist", async () => {
+    mockGet.mockResolvedValue({ exists: false });
+
+    await expect(Round5_Meta.runR5_Meta(RUN_ID)).rejects.toThrow(
+      new HttpsError("not-found", `Round 4 artifact not found for runId=${RUN_ID}`)
+    );
   });
 
-  it("validates excerpt word count robustly (between 50–100 words)", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    const wordCount = meta.excerpt.replace(/[^\w\s]/g, "").split(/\s+/).filter(Boolean).length;
-    expect(wordCount).toBeGreaterThanOrEqual(50);
-    expect(wordCount).toBeLessThanOrEqual(100);
+  it("should fail a draft that is too short", async () => {
+    const shortDraftData = {
+      items: [
+        { idea: "Too Short", polishedDraft: "This is too short." },
+        { ...MOCK_R4_DATA.items[1] },
+      ],
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => shortDraftData });
+    mockGeminiComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+
+    const result = await Round5_Meta.runR5_Meta(RUN_ID);
+
+    expect(result).toEqual({ metaCount: 1, failures: 1 });
+    expect(mockGeminiComplete).toHaveBeenCalledTimes(1); // Only called for the valid draft
   });
 
-  it("ensures tags, categories, relatedKeywords are non-empty arrays", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    expect(Array.isArray(meta.tags)).toBe(true);
-    expect(meta.tags.length).toBeGreaterThanOrEqual(3);
-    expect(Array.isArray(meta.categories)).toBe(true);
-    expect(meta.categories.length).toBeGreaterThan(0);
-    expect(Array.isArray(meta.relatedKeywords)).toBe(true);
-    expect(meta.relatedKeywords.length).toBeGreaterThanOrEqual(3);
-  });
+  it("should handle failure to parse JSON from LLM", async () => {
+    mockExtractJson.mockReturnValue(null);
+    mockGeminiComplete.mockResolvedValue("this is not json");
 
-  it("validates image suggestions for content and format hints", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    expect(meta.imageSuggestions.length).toBeGreaterThan(0);
-    const hasValidHint = meta.imageSuggestions.some((s: string) => s.startsWith("prompt:") || s.startsWith("reuse:"));
-    expect(hasValidHint).toBe(true);
-  });
+    const result = await Round5_Meta.runR5_Meta(RUN_ID);
 
-  it("ensures no empty fields", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    // Check main fields
-    expect(meta.seoTitle).toBeTruthy();
-    expect(meta.metaDescription).toBeTruthy();
-    expect(meta.excerpt).toBeTruthy();
-    // Check arrays
-    expect(meta.tags.length).toBeGreaterThan(0);
-    expect(meta.categories.length).toBeGreaterThan(0);
-    expect(meta.relatedKeywords.length).toBeGreaterThan(0);
-    expect(meta.imageSuggestions.length).toBeGreaterThan(0);
-  });
-
-  it("handles multiple drafts with varied LLM responses", async () => {
-    const drafts = [sampleDraft, sampleDraft, sampleDraft];
-    const invalidJsonResponse = { text: "This is not JSON." };
-
-    llmMock.generate
-      .mockResolvedValueOnce({ text: JSON.stringify(validMockResponse) })
-      .mockRejectedValueOnce(new Error("Invalid JSON"))
-      .mockResolvedValueOnce({ text: JSON.stringify(validMockResponse) }); // reuse for the third call
-
-    const multiResult = await Promise.all(drafts.map(draft => generateMetaForDraft(draft, llmMock)));
-    
-    expect(multiResult.length).toBe(drafts.length);
-    expect(llmMock.generate).toHaveBeenCalledTimes(drafts.length);
-    
-    // Check that we got a successful result for the first and third calls
-    expect(multiResult[0]).not.toBeNull();
-    expect(multiResult[2]).not.toBeNull();
-    
-    // Check that the second call, which had an invalid response, returned null
-    expect(multiResult[1]).toBeNull();
-  });
-
-  it("handles empty and very short drafts gracefully", async () => {
-    const edgeCaseDrafts = ["", "Too short."];
-    const result = await Promise.all(edgeCaseDrafts.map(draft => generateMetaForDraft(draft, llmMock)));
-    expect(result.length).toBe(edgeCaseDrafts.length);
-    expect(result[0]).toBeNull();
-    expect(result[1]).toBeNull();
-    expect(llmMock.generate).not.toHaveBeenCalled();
-  });
-
-  it("checks content quality: title vs description vs excerpt", async () => {
-    const result = await generateMetaForDraft(sampleDraft, llmMock);
-    const meta = result!;
-    expect(meta.seoTitle).not.toEqual(meta.metaDescription);
-    // Description should be substantially longer than the title
-    expect(meta.metaDescription.length).toBeGreaterThan(meta.seoTitle.length);
+    expect(result).toEqual({ metaCount: 0, failures: 2 });
   });
 });

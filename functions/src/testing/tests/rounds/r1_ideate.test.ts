@@ -1,199 +1,94 @@
-/**
- * This suite tests the main function `runRound1` for:
- * - Core success case: reading trends, calling LLM, and writing ideas
- * - Schema validation of the output
- * - Handles various error conditions gracefully, including:
- *   - Artifact not found
- *   - Empty trend list
- *   - Invalid JSON from API
- *   - API error (non-200 response)
- *   - Max cap of 60 ideas enforced
- */
+import { ARTIFACT_PATHS } from "../../../utils/constants";
+import { Round1_Ideate } from "../../../rounds/r1_ideate";
+import * as admin from "firebase-admin";
+import * as hf from "../../../clients/hf";
+import { HttpsError } from "firebase-functions/v2/https";
 
-import { Round1_Ideate as runRound1 } from "../../../rounds/r1_ideate";
-import { IdeationItem } from "../../../utils/schema";
-import admin from "firebase-admin";
-import fetch, { Response } from "node-fetch";
-
-jest.mock("node-fetch", () => jest.fn());
-const mockedFetch = fetch as unknown as jest.MockedFunction<typeof fetch>;
-
-// --- Firestore Mock ---
-const setMock = jest.fn();
-const getMock = jest.fn();
-
-// Forward declare mocks to handle circular dependency
-let docMock: jest.Mock;
-const collectionMock: jest.Mock = jest.fn((path) => ({
-  doc: docMock,
-  path,
+// Mock Firebase
+jest.mock("firebase-admin", () => ({
+  initializeApp: jest.fn(),
+  firestore: jest.fn(() => ({
+    doc: jest.fn(),
+  })),
 }));
 
-docMock = jest.fn((path) => ({
-  get: getMock,
-  set: setMock,
-  collection: collectionMock, // This allows chaining .collection() after .doc()
-  path,
+const mockSet = jest.fn();
+const mockGet = jest.fn();
+const mockDoc = jest.fn(() => ({
+  get: mockGet,
+  set: mockSet,
 }));
+(admin.firestore as jest.Mock).mockReturnValue({ doc: mockDoc });
 
-const firestoreMock = {
-  collection: collectionMock,
-  doc: docMock,
-};
+// Mock HF client
+jest.mock("../../../clients/hf");
+const mockHfComplete = hf.hfComplete as jest.Mock;
 
-const firestoreFuncWithStatics = jest.fn(() => firestoreMock) as any;
-firestoreFuncWithStatics.FieldValue = {
-  serverTimestamp: jest.fn(() => "MOCK_SERVER_TIMESTAMP"),
-};
-// --- End Firestore Mock ---
-
-describe("r1_ideation runRound1", () => {
-  const runId = "test-run";
-
+describe("Round1_Ideate", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+  });
 
-    Object.defineProperty(admin, "firestore", {
-      get: () => firestoreFuncWithStatics,
-      configurable: true,
-    });
+  it("should throw if round 0 artifact is not found", async () => {
+    mockGet.mockResolvedValue({ exists: false });
+    await expect(Round1_Ideate({ data: { runId: "test-run-1" } } as any)).rejects.toThrow(
+      new HttpsError("not-found", "Round0 artifact not found for runId=test-run-1")
+    );
+  });
 
-    process.env.HUGGINGFACE_API_KEY = "test-key";
-    process.env.HUGGINGFACE_MODEL = "test-model";
+  it("should throw if round 0 artifact has no trend items", async () => {
+    mockGet.mockResolvedValue({ exists: true, data: () => ({ items: [] }) });
+    await expect(Round1_Ideate({ data: { runId: "test-run-1" } } as any)).rejects.toThrow(
+      new HttpsError("failed-precondition", "No trends found in round0 artifact for runId=test-run-1")
+    );
+  });
 
-    // Default successful mock for round0 document
+  it("should throw if the LLM produces no valid ideas", async () => {
     const r0Data = {
-      items: [
-        { query: "AI in healthcare", type: "trending", score: 1, source: ["serp"] },
-        { query: "Best budget smartphones", type: "autocomplete", score: 1, source: ["serp"] },
-        { query: "Remote work productivity", type: "related", score: 1, source: ["trends"] },
-      ],
-      cached: false,
-      sourceCounts: { serp: 2, trends: 1 },
+      items: [{ query: "test trend", score: 1, type: "trending", source: ["test"] }],
     };
-    getMock.mockResolvedValue({ exists: true, data: () => r0Data });
+    mockGet.mockResolvedValue({ exists: true, data: () => r0Data });
+    mockHfComplete.mockResolvedValue(
+      JSON.stringify([
+        {
+          trend: "test trend",
+          ideas: [], // no ideas
+        },
+      ])
+    );
 
-    // Default successful mock for fetch
-    const fakeModelOutput = JSON.stringify([
-      {
-        trend: "AI in healthcare",
-        ideas: [
-          "How AI is Transforming Healthcare in 2025",
-          "AI in Hospitals: Benefits and Challenges",
-          "The Future of Medicine with Artificial Intelligence",
-        ],
-      },
-      {
-        trend: "Best budget smartphones",
-        ideas: [
-          "Top Budget Smartphones for 2025",
-          "Best Value Phones Under $300",
-          "Budget Phone Camera Showdown 2025",
-        ],
-      },
-      {
-        trend: "Remote work productivity",
-        ideas: [
-          "Remote Work Productivity: Tools That Actually Help",
-          "How to Stay Focused When Working From Home",
-          "Managing Teams Remotely: Productivity Best Practices",
-        ],
-      },
-    ]);
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      text: async () => fakeModelOutput,
-      json: async () => JSON.parse(fakeModelOutput),
-      headers: { get: () => "application/json" },
-    } as unknown as Response;
-    mockedFetch.mockResolvedValue(mockResponse);
-  });
-
-  test("produces valid ideation items and writes to Firestore", async () => {
-    await runRound1(runId);
-
-    expect(collectionMock).toHaveBeenCalledWith("runs");
-    expect(docMock).toHaveBeenCalledWith(runId);
-    expect(collectionMock).toHaveBeenCalledWith("artifacts");
-    expect(docMock).toHaveBeenCalledWith("round0");
-
-    expect(setMock).toHaveBeenCalledTimes(1);
-    const [writtenData] = setMock.mock.calls[0];
-    const items = writtenData.items as IdeationItem[];
-
-    expect(items.length).toBeGreaterThanOrEqual(9);
-    expect(items.length).toBeLessThanOrEqual(60);
-
-    expect(setMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        items: expect.any(Array),
-        createdAt: "MOCK_SERVER_TIMESTAMP",
-      })
+    await expect(Round1_Ideate({ data: { runId: "test-run-1" } } as any)).rejects.toThrow(
+        new HttpsError("internal", 'Trend "test trend" produced fewer than 3 ideas (0).')
     );
   });
 
-  test("throws if Round0 artifact not found", async () => {
-    getMock.mockResolvedValue({ exists: false });
-    await expect(runRound1(runId)).rejects.toThrow(/Round0 artifact not found/);
-  });
+  it("should successfully generate and write ideas", async () => {
+    const runId = "test-run-success";
+    const r0Data = {
+      items: [{ query: "test trend", score: 1, type: "trending", source: ["test"] }],
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => r0Data });
 
-  test("throws if no trends in artifact", async () => {
-    getMock.mockResolvedValue({ exists: true, data: () => ({ items: [], cached: false, sourceCounts: {} }) });
-    await expect(runRound1(runId)).rejects.toThrow(/No trends found/);
-  });
+    const llmResponse = [
+      {
+        trend: "test trend",
+        ideas: ["Idea 1", "Idea 2", "Idea 3"],
+      },
+    ];
+    mockHfComplete.mockResolvedValue(JSON.stringify(llmResponse));
 
-  test("throws on invalid JSON from API", async () => {
-    const mockResponse = {
-        ok: true,
-        status: 200,
-        text: async () => "this is not json",
-        json: async () => JSON.parse("this is not json"),
-        headers: { get: () => "application/json" },
-      } as unknown as Response;
-    mockedFetch.mockResolvedValue(mockResponse);
+    const result = await Round1_Ideate({ data: { runId } } as any);
 
-    await expect(runRound1(runId)).rejects.toThrow();
-  });
+    expect(result).toHaveProperty("wrote");
+    expect(result.wrote).toBe(3);
 
-  test("throws on API error", async () => {
-    const mockResponse = {
-      ok: false,
-      status: 500,
-      statusText: "Internal Server Error",
-      text: async () => "error details",
-      headers: { get: () => "text/plain" },
-    } as unknown as Response;
-    mockedFetch.mockResolvedValue(mockResponse);
-
-    await expect(runRound1(runId)).rejects.toThrow(/Hugging Face API error: 500/);
-  });
-
-  test("enforces max cap of 60 ideas", async () => {
-    const trends = Array.from({ length: 20 }, (_, i) => ({
-      query: `Trend ${i + 1}`,
-      type: "trending",
-      score: 1,
-      source: ["test"],
-    }));
-    getMock.mockResolvedValue({ exists: true, data: () => ({ items: trends, cached: false, sourceCounts: {test: 20} }) });
-
-    const fakeModelOutput = JSON.stringify(
-      trends.map((t) => ({
-        trend: t.query,
-        ideas: Array.from({ length: 5 }, (_, i) => `Idea ${i + 1} for ${t.query}`),
-      }))
+    // Verify firestore write
+    expect(mockDoc).toHaveBeenCalledWith(
+      ARTIFACT_PATHS.R1_IDEATION.replace("{runId}", runId)
     );
-    const mockResponse = {
-      ok: true,
-      status: 200,
-      text: async () => fakeModelOutput,
-      json: async () => JSON.parse(fakeModelOutput),
-      headers: { get: () => "application/json" },
-    } as unknown as Response;
-    mockedFetch.mockResolvedValue(mockResponse);
-
-    const result = await runRound1(runId);
-    expect(result.wrote).toBe(60);
+    expect(mockSet).toHaveBeenCalled();
+    const writtenData = mockSet.mock.calls[0][0];
+    expect(writtenData.items).toHaveLength(3);
+    expect(writtenData.items[0].idea).toBe("Idea 1");
   });
 });

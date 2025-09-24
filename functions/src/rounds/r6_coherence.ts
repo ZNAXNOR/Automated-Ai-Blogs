@@ -1,122 +1,151 @@
-/**
- * - Takes Round 4 polished text and derivatives
- * - Assesses coherence of the polished text against the derivatives
- * - Stores results in Firestore, passing through all data for the next round
- */
-
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import * as admin from "firebase-admin";
+import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { z } from "zod";
+import pLimit from "p-limit";
 import { env } from "../utils/config";
-import fetch from "node-fetch";
+import { logger } from "../utils/logger";
+import { ARTIFACT_PATHS } from "../utils/constants";
+import { calculateSimilarity } from "../clients/hf_sentence";
 
-interface CoherenceResult {
-  draftId: string;
-  coherenceScore: number;
+// --- Schemas ------------------------------------------------------------------
+
+const Round4ItemSchema = z.object({
+  idea: z.string(),
+  polishedDraft: z.string(),
+  derivatives: z.array(z.string()).min(1),
+});
+
+const Round4OutputSchema = z.object({
+  items: z.array(Round4ItemSchema),
+});
+
+const CoherenceItemSchema = z.object({
+  idea: z.string(),
+  coherenceScore: z.number().min(0).max(1),
+});
+
+const Round6OutputSchema = z.object({
+  items: z.array(CoherenceItemSchema),
+});
+
+const FailedItemSchema = z.object({
+  item: Round4ItemSchema,
+  error: z.string(),
+});
+
+// --- Constants ----------------------------------------------------------------
+
+const ROUND = 6;
+const CONCURRENCY = 5;
+
+// --- Admin SDK ----------------------------------------------------------------
+
+if (!admin.apps.length) {
+  admin.initializeApp();
 }
+const db = admin.firestore();
 
-async function callHuggingFace(text: string, textsToCompare: string[]): Promise<(number | null)[]> {
-    const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR6}`;
+// --- Helper Functions ---------------------------------------------------------
 
-    const response = await fetch(HF_API_URL, {
-        method: "POST",
-        headers: {
-            Authorization: `Bearer ${env.hfToken}`,
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            inputs: {
-                source_sentence: text,
-                sentences: textsToCompare,
-            },
-        }),
-    });
-
-    if (!response.ok) {
-        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
-    }
-
-    const data = (await response.json()) as (number | null)[];
-    return data;
-}
-
-export async function runR6_Coherence(draftId: string, polishedText: string, derivatives: string[]): Promise<CoherenceResult> {
-  if (!draftId || !polishedText || !Array.isArray(derivatives) || derivatives.length === 0) {
-    throw new Error("Missing or invalid required fields: draftId, polishedText, or derivatives");
+async function getRound4Data(runId: string): Promise<z.infer<typeof Round4OutputSchema>> {
+  const docRef = db.doc(ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", runId));
+  const docSnap = await docRef.get();
+  if (!docSnap.exists) {
+    throw new HttpsError("not-found", `Round 4 artifact not found for runId=${runId}`);
   }
 
-  const scores = await callHuggingFace(polishedText, derivatives);
-
-  if (scores.some(score => typeof score !== 'number' && score !== null)) {
-      throw new Error("Invalid coherence scores received from API");
+  const validationResult = Round4OutputSchema.safeParse(docSnap.data());
+  if (!validationResult.success) {
+    logger.error("Round 4 data validation failed", { runId, error: validationResult.error });
+    throw new HttpsError("internal", "Round 4 data validation failed");
+  }
+  if (validationResult.data.items.length === 0) {
+    throw new HttpsError("failed-precondition", "R4 artifact has no items.");
   }
 
-  const totalScore = scores.reduce<number>((sum, score) => sum + (score || 0), 0);
-  const averageScore = scores.length > 0 ? totalScore / scores.length : 0;
-
-  return { draftId, coherenceScore: averageScore };
+  return validationResult.data;
 }
 
-export async function Round6_Coherence(runId: string): Promise<void> {
-  const db = getFirestore();
-  console.log(`R6: Starting Round 6 for runId=${runId}`);
+async function analyzeCoherence(
+  item: z.infer<typeof Round4ItemSchema>
+): Promise<z.infer<typeof CoherenceItemSchema>> {
+  const scores = await calculateSimilarity(item.polishedDraft, item.derivatives);
+  const averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
 
-  const r4ArtifactsCollection = db.collection(`runs/${runId}/artifacts/round4_distribution`);
-  const r4DocsSnapshot = await r4ArtifactsCollection.get();
+  return { idea: item.idea, coherenceScore: averageScore };
+}
 
-  if (r4DocsSnapshot.empty) {
-    console.log(`R6: No Round 4 artifacts found for runId=${runId}. Exiting.`);
+async function writeArtifacts(
+  runId: string,
+  successfulItems: z.infer<typeof CoherenceItemSchema>[],
+  failedItems: z.infer<typeof FailedItemSchema>[]
+): Promise<void> {
+  if (successfulItems.length === 0 && failedItems.length === 0) {
+    logger.warn("No artifacts to write for Round 6.", { runId });
     return;
   }
 
-  const draftsToProcess: { id: string; data: any }[] = [];
-  r4DocsSnapshot.docs.forEach((doc) => {
-    const data = doc.data();
-    if (data && data.polished && Array.isArray(data.derivatives)) {
-      draftsToProcess.push({ id: doc.id, data });
-    }
-  });
+  const batch = db.batch();
 
-  console.log(`R6: Found ${draftsToProcess.length} drafts to process.`);
-
-  const coherencePromises = draftsToProcess.map(async ({ id, data }) => {
-    try {
-      const { coherenceScore } = await runR6_Coherence(id, data.polished, data.derivatives);
-      return {
-        ...data,
-        draftId: id,
-        coherenceScore,
-        validatedText: data.polished,
-      };
-    } catch (error) {
-      console.error(`R6: Error processing draft ${id}:`, error);
-      return null;
-    }
-  });
-
-  const results = await Promise.all(coherencePromises);
-  const successfulResults = results.filter((r) => r !== null) as any[];
-  const failedCount = results.length - successfulResults.length;
-
-  console.log(`R6: Successfully calculated coherence for ${successfulResults.length} drafts.`);
-  if (failedCount > 0) {
-    console.warn(`R6: Failed to calculate coherence for ${failedCount} drafts.`);
-  }
-
-  if (successfulResults.length > 0) {
-    const r6Collection = db.collection(`runs/${runId}/artifacts/round6`);
-    const batch = db.batch();
-
-    successfulResults.forEach((result) => {
-        const docRef = r6Collection.doc(result.draftId);
-        delete result.polished; // Clean up redundant field
-        batch.set(docRef, { ...result, createdAt: FieldValue.serverTimestamp() });
+  if (successfulItems.length > 0) {
+    const successPath = ARTIFACT_PATHS.R6_COHERENCE.replace("{runId}", runId);
+    batch.set(db.doc(successPath), {
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      items: successfulItems,
     });
-    await batch.commit();
-    console.log(`R6: Successfully saved ${successfulResults.length} coherence scores.`);
   }
 
-  console.log(`R6: Round 6 finished for runId=${runId}.`);
+  // No explicit failure artifact for R6 yet, just logging.
+
+  await batch.commit();
 }
 
+// --- Main Function ------------------------------------------------------------
+
+export async function runR6_Coherence(
+  runId: string
+): Promise<{ coherenceCount: number; failures: number }> {
+  logger.info(`Round ${ROUND}: Coherence starting`, { runId });
+
+  const { items: r4Items } = await getRound4Data(runId);
+
+  const limit = pLimit(CONCURRENCY);
+  const successfulItems: z.infer<typeof CoherenceItemSchema>[] = [];
+  const failedItems: z.infer<typeof FailedItemSchema>[] = [];
+
+  const promises = r4Items.map((item) =>
+    limit(async () => {
+      try {
+        const coherenceItem = await analyzeCoherence(item);
+        successfulItems.push(coherenceItem);
+      } catch (error: any) {
+        logger.error(`Failed to analyze coherence for "${item.idea}"`, { runId, error: error.message });
+        failedItems.push({ item, error: error.message });
+      }
+    })
+  );
+
+  await Promise.all(promises);
+
+  await writeArtifacts(runId, successfulItems, failedItems);
+
+  const result = { coherenceCount: successfulItems.length, failures: failedItems.length };
+  logger.info(`Round ${ROUND}: Coherence finished`, { runId, ...result });
+  return result;
+}
+
+export const Round6_Coherence = onCall(
+  { timeoutSeconds: 180, memory: "256MiB", region: env.region },
+  (req) => {
+    const { runId } = req.data;
+    if (typeof runId !== "string" || !runId) {
+      throw new HttpsError("invalid-argument", "runId must be a non-empty string.");
+    }
+    return runR6_Coherence(runId);
+  }
+);
+
 export const _test = {
-    runR6_Coherence,
+  runR6_Coherence,
+  analyzeCoherence,
 };

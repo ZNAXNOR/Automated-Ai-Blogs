@@ -32,6 +32,9 @@ if (process.env.CACHE_TTL_HOURS) {
 
 // --- Exported Configuration ---
 export const env = {
+    // Function region
+    region: process.env.REGION || "us-central1",
+
     // API Keys
     serpApiKey: process.env.SERPAPI_KEY!,
     hfToken: process.env.HF_TOKEN!,

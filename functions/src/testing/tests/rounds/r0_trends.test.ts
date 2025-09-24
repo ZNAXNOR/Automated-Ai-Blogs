@@ -1,4 +1,4 @@
-import { _test, TrendItem } from "../../../rounds/r0_trends";
+import { _test } from "../../../rounds/r0_trends";
 
 describe("Round0 deterministic processing", () => {
   test("normalizes, filters, dedupes, and limits to 12", () => {
@@ -51,12 +51,12 @@ describe("Round0 deterministic processing", () => {
     }
 
     // ensure dedupe happened for "OpenAI o3 mini"
-    const openaiItems = items.filter((i: TrendItem) => i.query.includes("openai o3 mini"));
+    const openaiItems = items.filter((i) => i.query.includes("openai o3 mini"));
     expect(openaiItems.length).toBeLessThanOrEqual(1);
 
     // sourceCounts exists and counts some sources
     expect(sourceCounts).toBeTruthy();
-    const sumCounts = Object.values(sourceCounts).reduce((a: number, b: number) => a + b, 0);
+    const sumCounts = Object.values(sourceCounts).reduce((a, b) => a + b, 0);
     expect(sumCounts).toBeGreaterThan(0);
   });
 

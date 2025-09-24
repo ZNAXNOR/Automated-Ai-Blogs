@@ -1,154 +1,160 @@
-import { Round4_Polish } from "../../../rounds/r4_polish";
-import { DraftItem, PolishedDraftItem } from "../../../utils/schema";
-import { ResponseWrapper } from "../../../utils/responseHelper";
-import admin from "firebase-admin";
+const mockSet = jest.fn();
+const mockGet = jest.fn();
+// Add path to the mock doc so we can identify it in tests
+const mockDoc = jest.fn((path) => ({ get: mockGet, set: mockSet, path }));
+const mockBatchCommit = jest.fn();
+const mockBatchSet = jest.fn();
+const mockBatch = jest.fn(() => ({
+  commit: mockBatchCommit,
+  set: mockBatchSet,
+  get isEmpty() {
+    return mockBatchSet.mock.calls.length === 0;
+  },
+}));
 
-// Mock dependencies
-const mockLlmApiCall = jest.fn();
-jest.mock("p-limit", () => {
-  const limit = (fn: any) => fn();
-  return () => limit;
-});
-
-jest.mock("node-fetch", () => jest.fn());
-
-describe("Round4_Polish", () => {
-  const RUN_ID = "test-run-r4";
-  const MOCK_DRAFTS: DraftItem[] = [
+jest.mock("firebase-admin", () => ({
+  apps: [],
+  initializeApp: jest.fn(),
+  firestore: Object.assign(
+    () => ({
+      doc: mockDoc,
+      batch: mockBatch,
+    }),
     {
-      idea: "Test Idea 1",
-      draft: "This is the first draft.",
+      FieldValue: {
+        serverTimestamp: jest.fn(() => "MOCK_TIMESTAMP"),
+      },
+    }
+  ),
+}));
+
+// Manually mock the hf client to ensure all exports are present
+jest.mock("../../../clients/hf", () => ({
+  __esModule: true,
+  hfComplete: jest.fn(),
+  extractJsonFromText: jest.fn(),
+}));
+
+import { _test as Round4_Polish } from "../../../rounds/r4_polish";
+import * as hf from "../../../clients/hf";
+import { HttpsError } from "firebase-functions/v2/https";
+import { ARTIFACT_PATHS } from "../../../utils/constants";
+
+const mockHfComplete = hf.hfComplete as jest.Mock;
+const mockExtractJson = hf.extractJsonFromText as jest.Mock;
+
+const RUN_ID = "test-run-789";
+
+const MOCK_R3_DATA = {
+  items: [
+    {
+      idea: "The Future of Remote Work",
+      draft: "Draft about remote work...",
     },
     {
-      idea: "Test Idea 2",
-      draft: "This is the second draft, which is much longer and more detailed.",
+      idea: "The History of Coffee",
+      draft: "Draft about coffee...",
     },
-  ];
+  ],
+};
 
-  const MOCK_LLM_RESPONSE = {
-    polished: "This is a beautifully polished version of the draft.",
-    derivatives: ["Tweet: A polished draft is here!", "Email: Check out this great new article."],
-  };
+const VALID_LLM_OUTPUT = {
+  polished: "This is a beautifully polished piece of content about remote work. It is well-structured, engaging, and provides valuable insights for the reader. ".repeat(5),
+  derivatives: [
+    "Check out our new blog post on the future of remote work! #remotework #futureofwork",
+    "Are you ready for the new era of work? Our latest article explores the trends and challenges of remote work.",
+  ],
+};
 
-  let firestoreMock: any;
+const MALFORMED_LLM_OUTPUT_STRING = `Here's the content you requested... {\"polished\": \"...\"}`;
 
+describe("runR4_Polish", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-
-    const llmResponseWrapper = {
-      json: jest.fn().mockResolvedValue(MOCK_LLM_RESPONSE),
-    } as unknown as ResponseWrapper;
-
-    mockLlmApiCall.mockResolvedValue(llmResponseWrapper);
-
-    // --- Firestore Mock ---
-    const setMock = jest.fn();
-    const getMock = jest.fn().mockResolvedValue({
-      exists: true,
-      data: () => ({ items: MOCK_DRAFTS }),
-    });
-    const docMock = jest.fn((path) => ({
-      get: getMock,
-      set: setMock,
-      path,
-    }));
-    const collectionMock = jest.fn((path) => ({
-      doc: docMock,
-      path,
-    }));
-    const batchSetMock = jest.fn();
-    const batchCommitMock = jest.fn().mockResolvedValue(undefined);
-    const batchMock = jest.fn(() => ({
-      set: batchSetMock,
-      commit: batchCommitMock,
-    }));
-
-    firestoreMock = {
-      collection: collectionMock,
-      doc: docMock,
-      batch: batchMock,
-    };
-
-    Object.defineProperty(admin, "firestore", {
-      get: () => (() => firestoreMock) as any,
-      configurable: true,
-    });
-    // --- End Firestore Mock ---
+    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R3_DATA });
+    // The function being mocked is synchronous, so we just return the input text
+    mockExtractJson.mockImplementation((text) => text);
   });
 
-  it("should process drafts and save polished versions successfully", async () => {
-    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
-      llmApiCall: mockLlmApiCall,
-      firestore: firestoreMock,
-    });
+  it("should process all drafts successfully, writing a single polished artifact", async () => {
+    mockHfComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
 
-    expect(polishedCount).toBe(MOCK_DRAFTS.length);
-    expect(failures).toBe(0);
-    expect(mockLlmApiCall).toHaveBeenCalledTimes(MOCK_DRAFTS.length);
-    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(1);
-    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+
+    expect(result).toEqual({ polishedCount: 2, failures: 0 });
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    expect(mockHfComplete).toHaveBeenCalledTimes(2);
+    expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only one successful artifact
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
+
+    const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", RUN_ID);
+    const writtenRef = mockBatchSet.mock.calls[0][0];
+    const writtenData = mockBatchSet.mock.calls[0][1];
+
+    expect(writtenRef.path).toBe(successPath);
+    expect(writtenData.items).toHaveLength(2);
+    expect(writtenData.items[0].idea).toBe("The Future of Remote Work");
+    expect(writtenData.items[0].derivatives).toHaveLength(2);
   });
 
   it("should handle a mix of successful and failed polishing attempts", async () => {
-    const error = new Error("LLM call timed out");
-    const llmSuccessResponse = {
-        json: jest.fn().mockResolvedValue(MOCK_LLM_RESPONSE),
-    } as unknown as ResponseWrapper;
+    mockHfComplete
+      .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT)) // 1st item succeeds
+      .mockRejectedValueOnce(new Error("LLM is flaky"))       // 2nd item fails once
+      .mockRejectedValueOnce(new Error("LLM is still flaky")); // 2nd item fails retry
 
-    mockLlmApiCall.mockImplementation(async (prompt: string) => {
-        if (prompt.includes(MOCK_DRAFTS[0].draft)) {
-            return Promise.reject(error);
-        }
-        return Promise.resolve(llmSuccessResponse);
-    });
+    const result = await Round4_Polish.runR4_Polish(RUN_ID);
 
-    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
-      llmApiCall: mockLlmApiCall,
-      firestore: firestoreMock,
-    });
+    expect(result).toEqual({ polishedCount: 1, failures: 1 });
+    expect(mockBatchSet).toHaveBeenCalledTimes(2); // One success, one failure
+    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
 
-    expect(polishedCount).toBe(1);
-    expect(failures).toBe(1);
-    expect(mockLlmApiCall).toHaveBeenCalledTimes(4);
-    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(2);
-    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+    const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", RUN_ID);
+    const successCall = mockBatchSet.mock.calls.find(call => call[0].path === successPath);
+    expect(successCall[1].items).toHaveLength(1);
+    expect(successCall[1].items[0].idea).toBe("The Future of Remote Work");
+
+    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", RUN_ID);
+    const failureCall = mockBatchSet.mock.calls.find(call => call[0].path === failurePath);
+    expect(failureCall[1].items).toHaveLength(1);
+    expect(failureCall[1].items[0].item.idea).toBe("The History of Coffee");
+    expect(failureCall[1].items[0].error).toContain("LLM is still flaky");
   });
 
-  it("should handle zero drafts being found", async () => {
-    firestoreMock.doc().get.mockResolvedValue({ exists: true, data: () => ({ items: [] }) });
+  it("should retry on malformed JSON and succeed on the second attempt", async () => {
+    mockHfComplete
+        .mockResolvedValueOnce(MALFORMED_LLM_OUTPUT_STRING)
+        .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT))
+        .mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
 
-    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
-      llmApiCall: mockLlmApiCall,
-      firestore: firestoreMock,
-    });
+    // extractJsonFromText is synchronous, use mockReturnValue
+    mockExtractJson
+        .mockReturnValueOnce(null) // First call fails to find JSON
+        .mockReturnValue(JSON.stringify(VALID_LLM_OUTPUT)); // Subsequent calls succeed
 
-    expect(polishedCount).toBe(0);
-    expect(failures).toBe(0);
-    expect(mockLlmApiCall).not.toHaveBeenCalled();
-    expect(firestoreMock.batch().commit).not.toHaveBeenCalled();
+    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+
+    expect(result).toEqual({ polishedCount: 2, failures: 0 });
+    expect(mockHfComplete).toHaveBeenCalledTimes(3); // 1 initial fail, 1 retry success, 1 for second item
   });
 
-  it("should throw an error if the R3 artifact is not found", async () => {
-    firestoreMock.doc().get.mockResolvedValue({ exists: false });
-
-    await expect(
-      Round4_Polish(RUN_ID, {
-        llmApiCall: mockLlmApiCall,
-        firestore: firestoreMock,
-      })
-    ).rejects.toThrow(`R3 artifact not found for runId=${RUN_ID}`);
+  it("should throw not-found if the R3 artifact does not exist", async () => {
+    mockGet.mockResolvedValue({ exists: false });
+    await expect(Round4_Polish.runR4_Polish(RUN_ID)).rejects.toThrow(
+      new HttpsError("not-found", `Round 3 artifact not found for runId=${RUN_ID}`)
+    );
   });
 
-  it("should correcly use the buildPrompt function", async () => {
-    const { polishedCount, failures } = await Round4_Polish(RUN_ID, {
-      llmApiCall: mockLlmApiCall,
-      firestore: firestoreMock,
-    });
+  it("should handle the case where all polishing attempts fail", async () => {
+    mockHfComplete.mockRejectedValue(new Error("LLM is down"));
 
-    expect( polishedCount).toBe(MOCK_DRAFTS.length);
-    expect(failures).toBe(0);
-    expect(mockLlmApiCall).toHaveBeenCalledTimes(MOCK_DRAFTS.length);
-    expect(firestoreMock.batch().set).toHaveBeenCalledTimes(1);
-    expect(firestoreMock.batch().commit).toHaveBeenCalledTimes(1);
+    const result = await Round4_Polish.runR4_Polish(RUN_ID);
+
+    expect(result).toEqual({ polishedCount: 0, failures: 2 });
+    expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only the failure artifact
+
+    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", RUN_ID);
+    const failureCall = mockBatchSet.mock.calls.find(call => call[0].path === failurePath);
+    expect(failureCall[1].items).toHaveLength(2);
   });
 });
