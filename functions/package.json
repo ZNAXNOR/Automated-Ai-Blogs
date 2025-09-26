@@ -2,7 +2,7 @@
   "name": "js-character-generator",
   "version": "0.1.0",
   "description": "A simple Genkit app to generate fantasy characters",
-  "main": "index.js",
+  "main": "lib/full_blog_pipeline.js",
   "scripts": {
     "test": "jest",
     "build": "npx tsc",
@@ -12,7 +12,9 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "@tryghost/admin-api": "^1.14.0",
     "@types/jest": "^30.0.0",
+    "@types/tryghost__admin-api": "^0.0.1",
     "dotenv": "^17.2.2",
     "genkit-cli": "^1.0.4",
     "jest": "^30.1.3",

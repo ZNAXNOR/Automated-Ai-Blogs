@@ -27,11 +27,11 @@ import { getSerpSuggestions, getSerpRelated, getSerpTrending, serpAvailable } fr
 import { getCache, setCache } from "../utils/cache";
 import { Round0InputSchema, Round0OutputSchema } from "../utils/schema";
 import type { TrendItem, Round0Input, JobPayload } from "../utils/types";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { logger } from "../utils/logger";
 import { ResponseWrapper } from "../utils/responseHelper";
 import fetch from "node-fetch";
-
+import { hfComplete } from "../clients/hf";
 
 // Re-export TrendItem for test file
 export type { TrendItem } from '../utils/schema';
@@ -47,6 +47,7 @@ if (!admin.apps.length) {
   admin.initializeApp();
 }
 const db = admin.firestore();
+db.settings({ ignoreUndefinedProperties: true });
 
 // --- Lightweight RSS sources (fallback) --------------------------------------
 const RSS_SOURCES: { name: string; url: string }[] = [
@@ -144,12 +145,11 @@ ${items.map(i => `- ${i.query} [${i.type}]`).join("\n")}
 `;
 
   try {
-    const { hfTinyComplete } = await import("../clients/hf");
-    const csv = await hfTinyComplete(prompt);
+    const csv = await hfComplete(prompt, constants.TINY_HF_MODEL);
     if (!csv) return items;
 
     const boosts = new Map<string, number>();
-    csv.split(/\r?\n/).forEach(line => {
+    csv.split(/\r?\n/).forEach((line: string) => {
       const m = line.split(",");
       if (m.length >= 2) {
         const q = normalizeQuery(m[0] || "");
@@ -285,7 +285,7 @@ export function deterministicProcess(
 }
 
 async function getExistingArtifact(runId: string) {
-  const ref = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
+  const ref = db.doc(constants.ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
   const snap = await ref.get();
   return snap.exists ? snap.data() : null;
 }
@@ -296,7 +296,7 @@ async function writeArtifact(runId:string, payload: any) {
         logger.error(`Round 0 output validation failed for runId: ${runId}`, { error: parsed.error });
         throw new HttpsError("internal", "Round 0 output validation failed", { error: parsed.error });
     }
-    const ref = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
+    const ref = db.doc(constants.ARTIFACT_PATHS.R0_TRENDS.replace('{runId}', runId));
     await ref.set({
         ...parsed.data,
         createdAt: FieldValue.serverTimestamp(),

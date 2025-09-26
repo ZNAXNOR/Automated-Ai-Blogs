@@ -17,7 +17,7 @@ jest.mock("../../../clients/hf");
 import { run } from "../../../rounds/r3_draft";
 import * as hf from "../../../clients/hf";
 import { HttpsError } from "firebase-functions/v2/https";
-import { ARTIFACT_PATHS } from "../../../utils/constants";
+import { constants } from "../../../utils/constants";
 
 const mockHfComplete = hf.hfComplete as jest.Mock;
 
@@ -56,7 +56,7 @@ describe("runR3_Draft", () => {
     const result = await run({ runId: RUN_ID });
 
     expect(result).toEqual({ draftsCreated: 2, failures: 0 });
-    expect(mockDoc).toHaveBeenCalledWith(ARTIFACT_PATHS.R2_OUTLINE.replace("{runId}", RUN_ID));
+    expect(mockDoc).toHaveBeenCalledWith(constants.ARTIFACT_PATHS.R2_OUTLINES.replace("{runId}", RUN_ID));
     expect(mockHfComplete).toHaveBeenCalledTimes(2);
     expect(mockSet).toHaveBeenCalledTimes(1);
 

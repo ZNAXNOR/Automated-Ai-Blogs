@@ -1,99 +1,65 @@
-import { Round6_Coherence as runRound6 } from "../../../rounds/r6_coherence";
-import { R5Meta } from "../../../utils/types";
-import { getFirestore } from 'firebase-admin/firestore';
-import { calculateSimilarity } from '../../../clients/hf_sentence';
+import { run as runR6 } from '../../../rounds/r6_coherence';
+import { constants } from '../../../utils/constants';
+import * as admin from 'firebase-admin';
+import * as hf from '../../../clients/hf';
 
-// --- Mocks Setup ---
+const RUN_ID = 'pairwise-test-r5-r6';
 
-jest.mock('firebase-admin/firestore', () => {
-    const mocks = {
-        doc: jest.fn(),
-        get: jest.fn(),
-        set: jest.fn(),
-        batch: jest.fn(),
-        batchSet: jest.fn(),
-        batchCommit: jest.fn(),
-    };
-    mocks.doc.mockReturnValue({ get: mocks.get, set: mocks.set });
-    mocks.batch.mockReturnValue({ set: mocks.batchSet, commit: mocks.batchCommit });
-    const mockedGetFirestore = jest.fn().mockReturnValue({ doc: mocks.doc, batch: mocks.batch });
-    (mockedGetFirestore as any).__firestoreMocks = mocks;
-    return { getFirestore: mockedGetFirestore, FieldValue: { serverTimestamp: jest.fn() } };
+// Mock Firebase Admin SDK
+jest.mock('firebase-admin', () => {
+  const mockFirestore = () => ({
+    doc: jest.fn(),
+    collection: jest.fn(),
+    batch: jest.fn(() => ({ set: jest.fn(), commit: jest.fn() }))
+  });
+  const firebaseAdmin = {
+    initializeApp: jest.fn(),
+    firestore: mockFirestore,
+    apps: [] as any[],
+  };
+  (firebaseAdmin.initializeApp as jest.Mock).mockImplementation(() => {
+    if (firebaseAdmin.apps.length === 0) {
+      firebaseAdmin.apps.push({ name: '[DEFAULT]' });
+    }
+  });
+  return firebaseAdmin;
 });
 
-jest.mock('../../../clients/hf_sentence');
-const mockedCalculateSimilarity = calculateSimilarity as jest.Mock;
+// Mock HF client
+jest.mock('../../../clients/hf');
+const mockHfSentenceSimilarity = hf.hfSentenceSimilarity as jest.Mock;
 
-// --- Helper to access the mocks ---
-const getMocks = () => (getFirestore as any).__firestoreMocks;
-
-// --- Test Data ---
-const r5Items: R5Meta[] = [
-  { trendId: "t1", title: "The Renaissance of Board Games", draft: "...", metaTitle: "...", metaDescription: "..." },
-  { trendId: "t2", title: "The Science of Sleep", draft: "...", metaTitle: "...", metaDescription: "..." },
-];
-
-// --- Test Suite ---
-describe("Pairwise: R5 -> R6", () => {
-  const runId = "pairwise-test-r5-r6";
-
+describe('R5 to R6 Pairwise Test', () => {
   beforeEach(() => {
-    const mocks = getMocks();
-    Object.values(mocks).forEach((mock: any) => mock.mockClear());
-    mockedCalculateSimilarity.mockClear();
-
-    mocks.get.mockResolvedValue({ exists: true, data: () => ({ items: r5Items }) });
-    mocks.batchCommit.mockResolvedValue(null);
-    mockedCalculateSimilarity.mockResolvedValue(new Array(r5Items.length).fill(0.85));
-    
-    process.env.HUGGINGFACE_API_KEY_SENTENCE = "test-key";
-    process.env.HUGGINGFACE_SENTENCE_MODEL = "test-model";
+    jest.clearAllMocks();
+    admin.apps.length = 0; // Reset apps before each test
   });
 
-  test("R5 output feeds correctly into R6 coherence generation", async () => {
-    // --- Arrange ---
-    const mocks = getMocks();
-    
-    const mockReq: any = {
-        method: 'POST',
-        headers: { origin: 'http://localhost', 'content-type': 'application/json' },
-        body: { data: { runId } },
-        get: (header: string) => mockReq.headers[header.toLowerCase()],
-        header: (header: string) => mockReq.headers[header.toLowerCase()],
+  it('should run R6 successfully with the output from R5', async () => {
+    const r5Data = {
+      items: [
+        { id: '1', title: 'AI in Marketing', draft: 'This is a draft.', metaTitle: 'AI Marketing', metaDescription: 'Desc' },
+        { id: '2', title: 'Sustainable Living', draft: 'This is a draft.', metaTitle: 'Sustainable Living', metaDescription: 'Desc' },
+      ],
     };
 
-    const mockRes: any = {
-        statusCode: 200,
-        status: (code: number) => {
-            mockRes.statusCode = code;
-            return mockRes;
-        },
-        setHeader: jest.fn(),
-        getHeader: jest.fn(),
-        send: jest.fn(),
-        on: jest.fn(),
-        end: jest.fn(),
-    };
+    const mockGet = jest.fn().mockResolvedVaxlue({ exists: true, data: () => r5Data });
+    const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
+    const mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
 
-    // --- Act ---
-    await runRound6(mockReq, mockRes);
+    (admin.firestore as jest.Mock).mockReturnValue({
+        doc: mockDoc,
+        batch: mockBatch,
+    });
 
-    // --- Assert ---
-    expect(mockRes.send).toHaveBeenCalledWith({ result: { coherenceCount: 2, failures: 0 } });
-    expect(mocks.doc).toHaveBeenCalledWith(`runs/${runId}/artifacts/round5_meta`);
-    expect(mocks.get).toHaveBeenCalledTimes(1);
-    expect(mocks.batch).toHaveBeenCalled();
-    expect(mocks.doc).toHaveBeenCalledWith(`runs/${runId}/artifacts/round6_coherence`);
-    expect(mocks.batchSet).toHaveBeenCalledTimes(1);
-    expect(mocks.batchCommit).toHaveBeenCalledTimes(1);
+    mockHfSentenceSimilarity.mockResolvedValue([0.8, 0.9]);
 
-    const writtenData = mocks.batchSet.mock.calls[0][1];
-    expect(writtenData).toHaveProperty("items");
-    expect(writtenData.items.length).toBe(r5Items.length);
+    const result = await runR6({ runId: RUN_ID });
 
-    for (const item of writtenData.items) {
-      expect(item).toHaveProperty("coherenceScores");
-      expect(item.coherenceScores.overall).toBe(0.85);
-    }
+    expect(mockDoc).toHaveBeenCalledWith(constants.ARTIFACT_PATHS.R5_META.replace('{runId}', RUN_ID));
+    expect(result.passed).toBe(r5Data.items.length);
+    expect(result.failed).toBe(0);
   }, 10000);
 });

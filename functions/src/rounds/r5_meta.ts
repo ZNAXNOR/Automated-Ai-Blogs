@@ -4,7 +4,7 @@ import { z } from "zod";
 import pLimit from "p-limit";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { hfComplete, extractJsonFromText } from "../clients/hf";
 import { JobPayload } from "../utils/types";
 
@@ -65,7 +65,7 @@ const db = admin.firestore();
 // --- Helper Functions ---------------------------------------------------------
 
 async function getRound4Data(runId: string): Promise<z.infer<typeof Round4OutputSchema>> {
-  const docRef = db.doc(ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", runId));
+  const docRef = db.doc(constants.ARTIFACT_PATHS.R4_POLISHED.replace("{runId}", runId));
   const docSnap = await docRef.get();
   if (!docSnap.exists) {
     throw new HttpsError("not-found", `Round 4 artifact not found for runId=${runId}`);
@@ -146,7 +146,7 @@ async function writeArtifacts(
   const batch = db.batch();
 
   if (successfulItems.length > 0) {
-    const successPath = ARTIFACT_PATHS.R5_META.replace("{runId}", runId);
+    const successPath = constants.ARTIFACT_PATHS.R5_METADATA.replace("{runId}", runId);
     batch.set(db.doc(successPath), {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       items: successfulItems,

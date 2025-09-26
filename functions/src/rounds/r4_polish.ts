@@ -4,7 +4,7 @@ import { z } from "zod";
 import pLimit from "p-limit";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { hfComplete, extractJsonFromText } from "../clients/hf";
 import { JobPayload } from "../utils/types";
 
@@ -60,7 +60,7 @@ const db = admin.firestore();
 // --- Helper Functions ---------------------------------------------------------
 
 async function getRound3Data(runId: string): Promise<z.infer<typeof Round3OutputSchema>> {
-  const docRef = db.doc(ARTIFACT_PATHS.R3_DRAFT.replace("{runId}", runId));
+  const docRef = db.doc(constants.ARTIFACT_PATHS.R3_DRAFTS.replace("{runId}", runId));
   const docSnap = await docRef.get();
   if (!docSnap.exists) {
     throw new HttpsError("not-found", `Round 3 artifact not found for runId=${runId}`);
@@ -139,7 +139,7 @@ async function writeArtifacts(
       logger.error("Final Round 4 output validation failed", { runId, error: validationResult.error });
       // Don't throw, as we still want to record failures
     } else {
-      const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", runId);
+      const successPath = constants.ARTIFACT_PATHS.R4_POLISHED.replace("{runId}", runId);
       batch.set(db.doc(successPath), {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         ...validationResult.data,
@@ -149,7 +149,7 @@ async function writeArtifacts(
 
   // --- Write Failures ---
   if (failedItems.length > 0) {
-    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", runId);
+    const failurePath = constants.ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", runId);
     batch.set(db.doc(failurePath), {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       items: failedItems,

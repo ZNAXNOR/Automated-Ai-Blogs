@@ -1,32 +1,27 @@
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+if (process.env.NODE_ENV !== 'test') {
+    // --- Environment Validation ---
+    const requiredEnvVars = [
+        'SERPAPI_KEY',
+        'HF_TOKEN',
+        'WP_PASSWORD'
+    ];
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    if (missingVars.length > 0) {
+        throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+    }
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local'), override: true });
+    // --- Format Validation ---
+    try {
+        new URL("https://odlabagency.wpcomstaging.com/");
+    } catch (e) {
+        throw new Error('Hardcoded WP_API_URL is not a valid URL.');
+    }
 
-// --- Environment Validation ---
-const requiredEnvVars = [
-    'SERPAPI_KEY',
-    'HF_TOKEN',
-    'WP_API_URL',
-    'WP_USERNAME',
-    'WP_PASSWORD'
-];
-const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
-if (missingVars.length > 0) {
-    throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
-}
-
-// --- Format Validation ---
-try {
-    new URL(process.env.WP_API_URL!);
-} catch (e) {
-    throw new Error('WP_API_URL is not a valid URL.');
-}
-
-if (process.env.CACHE_TTL_HOURS) {
-    const ttl = Number(process.env.CACHE_TTL_HOURS);
-    if (isNaN(ttl) || ttl <= 0) {
-        throw new Error('CACHE_TTL_HOURS must be a positive number.');
+    if (process.env.CACHE_TTL_HOURS) {
+        const ttl = Number(process.env.CACHE_TTL_HOURS);
+        if (isNaN(ttl) || ttl <= 0) {
+            throw new Error('CACHE_TTL_HOURS must be a positive number.');
+        }
     }
 }
 
@@ -38,11 +33,10 @@ export const env = {
     // API Keys
     serpApiKey: process.env.SERPAPI_KEY!,
     hfToken: process.env.HF_TOKEN!,
-    geminiKey: process.env.GEMINI_KEY!,
 
     // WordPress
-    wpApiUrl: process.env.WP_API_URL!,
-    wpUsername: process.env.WP_USERNAME!,
+    wpApiUrl: "https://odlabagency.wpcomstaging.com/",
+    wpUsername: "odomkardalvi",
     wpPassword: process.env.WP_PASSWORD!,
 
     // Feature Flags & Settings

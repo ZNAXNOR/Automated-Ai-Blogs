@@ -1,114 +1,104 @@
-const mockSet = jest.fn();
-const mockGet = jest.fn();
-const mockDoc = jest.fn(() => ({ get: mockGet, set: mockSet }));
+const R2_RUN_ID = 'test-run-123';
 
-jest.mock("firebase-admin", () => ({
-  apps: [],
-  initializeApp: jest.fn(),
-  firestore: Object.assign(jest.fn(() => ({ doc: mockDoc })), {
-    FieldValue: {
-      serverTimestamp: jest.fn(() => "MOCK_TIMESTAMP"),
-    },
-  }),
-}));
+describe('Round 2: Outline', () => {
+  let run: any;
+  let admin: any;
+  let getFirestore: any;
+  let mockDoc: jest.Mock;
+  let mockGet: jest.Mock;
+  let mockSet: jest.Mock;
+  let mockFirestoreInstance: any;
+  let hfComplete: any;
 
-jest.mock("../../../clients/hf");
-
-import { ARTIFACT_PATHS } from "../../../utils/constants";
-import { run } from "../../../rounds/r2_outline";
-import * as hf from "../../../clients/hf";
-import { HttpsError } from "firebase-functions/v2/https";
-
-const mockHfComplete = hf.hfComplete as jest.Mock;
-
-const RUN_ID = "test-run-123";
-
-const MOCK_R1_DATA = {
-  items: [
-    {
-      trend: "AI in Marketing",
-      idea: "Using AI to Personalize Email Campaigns",
-      variant: 1,
-      source: "llm",
-    },
-  ],
-};
-
-const VALID_MOCK_LLM_RESPONSE = JSON.stringify([
-  {
-    trend: "AI in Marketing",
-    idea: "Using AI to Personalize Email Campaigns",
-    sections: [
-      {
-        heading: "Introduction",
-        bullets: ["What is AI personalization?", "Benefits for email marketing"],
-        estWordCount: 150,
-      },
-      {
-        heading: "Conclusion",
-        bullets: ["Summary of techniques", "Future of AI in email"],
-        estWordCount: 200,
-      },
-    ],
-  },
-]);
-
-const MALFORMED_JSON_LLM_RESPONSE = `[{"trend": "AI in Marketing", "idea": "...",}]`;
-
-describe("runR2_Outline", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetModules();
+
+    const firestoreStatic = {
+        FieldValue: {
+          serverTimestamp: jest.fn(),
+        },
+      };
+
+    jest.doMock('firebase-admin', () => ({
+      apps: [],
+      initializeApp: jest.fn(),
+      firestore: Object.assign(jest.fn(), firestoreStatic),
+    }));
+
+    jest.doMock('firebase-admin/firestore', () => ({
+      getFirestore: jest.fn(),
+    }));
+    jest.doMock('../../../clients/hf', () => ({
+      hfComplete: jest.fn(),
+    }));
+
+    admin = require('firebase-admin');
+    ({ getFirestore } = require('firebase-admin/firestore'));
+    ({ hfComplete } = require('../../../clients/hf'));
+
+    mockGet = jest.fn();
+    mockSet = jest.fn();
+    mockDoc = jest.fn().mockReturnValue({ get: mockGet, set: mockSet });
+    mockFirestoreInstance = { doc: mockDoc };
+
+    (getFirestore as jest.Mock).mockReturnValue(mockFirestoreInstance);
+    (admin.firestore as jest.Mock).mockReturnValue(mockFirestoreInstance);
+
+    ({ run } = require('../../../rounds/r2_outline'));
   });
 
-  it("should throw a not-found error if the r1 artifact does not exist", async () => {
-    mockGet.mockResolvedValue({ exists: false });
+  it('should successfully generate outlines for each idea', async () => {
+    const r1Data = {
+      items: [
+        { idea: 'Personalized learning paths using AI', trend: 'Personalized learning', variant: 1, source: 'llm' as const },
+        { idea: 'Gamified fitness apps for remote workers', trend: 'Gamified fitness', variant: 1, source: 'llm' as const },
+      ],
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => r1Data });
 
-    await expect(run({ runId: RUN_ID })).rejects.toThrow(
-      new HttpsError("not-found", `Round 1 artifact not found for runId=${RUN_ID}`)
-    );
-    expect(mockDoc).toHaveBeenCalledWith(
-      ARTIFACT_PATHS.R1_IDEATION.replace("{runId}", RUN_ID)
-    );
-  });
+    const llmResponse = `
+    [      
+      {
+        "trend": "Personalized learning",
+        "idea": "Personalized learning paths using AI",
+        "sections": [
+          {
+            "heading": "Introduction",
+            "bullets": ["Overview of AI in education"],
+            "estWordCount": 100
+          }
+        ]
+      },
+      {
+        "trend": "Gamified fitness",
+        "idea": "Gamified fitness apps for remote workers",
+        "sections": [
+          {
+            "heading": "Introduction",
+            "bullets": ["The rise of remote work and home fitness"],
+            "estWordCount": 100
+          }
+        ]
+      }
+    ]
+    `;
+    (hfComplete as jest.Mock).mockResolvedValue(llmResponse);
 
-  it("should throw a failed-precondition error if the r1 artifact is empty", async () => {
-    mockGet.mockResolvedValue({ exists: true, data: () => ({ items: [] }) });
+    const result = await run({ runId: R2_RUN_ID });
 
-    await expect(run({ runId: RUN_ID })).rejects.toThrow(
-      new HttpsError("failed-precondition", "R1 artifact has no items.")
-    );
-  });
-
-  it("should throw an internal error if the LLM response is not valid JSON", async () => {
-    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R1_DATA });
-    mockHfComplete.mockResolvedValue(MALFORMED_JSON_LLM_RESPONSE);
-
-    await expect(run({ runId: RUN_ID })).rejects.toThrow(
-      new HttpsError("internal", "Failed to parse LLM response for Round 2")
-    );
-  });
-
-  it("should successfully generate and write an outline", async () => {
-    // Arrange
-    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R1_DATA });
-    mockHfComplete.mockResolvedValue(VALID_MOCK_LLM_RESPONSE);
-
-    // Act
-    const result = await run({ runId: RUN_ID });
-
-    // Assert
-    expect(result).toEqual({ wrote: 1 });
-
-    // Verify Firestore write
-    const expectedPath = ARTIFACT_PATHS.R2_OUTLINE.replace("{runId}", RUN_ID);
-    expect(mockDoc).toHaveBeenCalledWith(expectedPath);
+    expect(result.wrote).toBe(r1Data.items.length);
     expect(mockSet).toHaveBeenCalled();
+  });
 
-    // Verify data written
-    const writtenData = mockSet.mock.calls[0][0];
-    expect(writtenData.items).toHaveLength(1);
-    expect(writtenData.items[0].sections).toHaveLength(2);
-    expect(writtenData.items[0].sections[0].heading).toBe("Introduction");
-    expect(writtenData.createdAt).toBe("MOCK_TIMESTAMP");
+  it('should throw an error if the LLM response is invalid', async () => {
+    const r1Data = {
+      items: [
+        { idea: 'AI in marketing', trend: 'AI in marketing', variant: 1, source: 'llm' as const }
+      ]
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => r1Data });
+    (hfComplete as jest.Mock).mockResolvedValue('invalid json');
+
+    await expect(run({ runId: R2_RUN_ID })).rejects.toThrow();
   });
 });

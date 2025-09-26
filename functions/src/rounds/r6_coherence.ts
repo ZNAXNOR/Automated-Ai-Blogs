@@ -4,7 +4,7 @@ import { z } from "zod";
 import pLimit from "p-limit";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { calculateSimilarity } from "../clients/hf_sentence";
 import { R5Meta, R6Coherence, JobPayload } from "../utils/types";
 
@@ -34,7 +34,7 @@ const db = admin.firestore();
 // --- Helper Functions ---------------------------------------------------------
 
 async function getR5Data(runId: string): Promise<z.infer<typeof R5OutputSchema>> {
-  const docRef = db.doc(ARTIFACT_PATHS.R5_META.replace("{runId}", runId));
+  const docRef = db.doc(constants.ARTIFACT_PATHS.R5_METADATA.replace("{runId}", runId));
   const docSnap = await docRef.get();
   if (!docSnap.exists) {
     throw new HttpsError("not-found", `Round 5 artifact not found for runId=${runId}`);
@@ -81,7 +81,7 @@ async function writeArtifacts(
   const batch = db.batch();
 
   if (successfulItems.length > 0) {
-    const successPath = ARTIFACT_PATHS.R6_COHERENCE.replace("{runId}", runId);
+    const successPath = constants.ARTIFACT_PATHS.R6_COHERENCE.replace("{runId}", runId);
     batch.set(db.doc(successPath), {
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       items: successfulItems,

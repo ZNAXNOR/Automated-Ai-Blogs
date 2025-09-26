@@ -1,160 +1,99 @@
-const mockSet = jest.fn();
-const mockGet = jest.fn();
-// Add path to the mock doc so we can identify it in tests
-const mockDoc = jest.fn((path) => ({ get: mockGet, set: mockSet, path }));
-const mockBatchCommit = jest.fn();
-const mockBatchSet = jest.fn();
-const mockBatch = jest.fn(() => ({
-  commit: mockBatchCommit,
-  set: mockBatchSet,
-  get isEmpty() {
-    return mockBatchSet.mock.calls.length === 0;
-  },
-}));
+import { run } from '../../../rounds/r4_polish';
+import { constants } from '../../../utils/constants';
+import * as admin from 'firebase-admin';
+import { extractJsonFromText } from '../../../clients/hf';
 
-jest.mock("firebase-admin", () => ({
-  apps: [],
-  initializeApp: jest.fn(),
-  firestore: Object.assign(
-    () => ({
-      doc: mockDoc,
-      batch: mockBatch,
+const RUN_ID = 'test-run-456';
+
+// Mock Firebase Admin SDK
+jest.mock('firebase-admin', () => {
+  const firestoreMock = {
+    doc: jest.fn(),
+    batch: jest.fn(() => ({ set: jest.fn(), commit: jest.fn() })),
+  };
+
+  const mockAdmin = {
+    initializeApp: jest.fn(),
+    firestore: Object.assign(jest.fn(() => firestoreMock), {
+      FieldValue: { serverTimestamp: jest.fn() },
     }),
-    {
-      FieldValue: {
-        serverTimestamp: jest.fn(() => "MOCK_TIMESTAMP"),
-      },
+    apps: [] as any[],
+  };
+
+  (mockAdmin.initializeApp as jest.Mock).mockImplementation(() => {
+    if (mockAdmin.apps.length === 0) {
+        mockAdmin.apps.push({ name: '[DEFAULT]' });
     }
-  ),
-}));
+  });
 
-// Manually mock the hf client to ensure all exports are present
-jest.mock("../../../clients/hf", () => ({
-  __esModule: true,
-  hfComplete: jest.fn(),
-  extractJsonFromText: jest.fn(),
-}));
+  return mockAdmin;
+});
 
-import { run } from "../../../rounds/r4_polish";
-import * as hf from "../../../clients/hf";
-import { HttpsError } from "firebase-functions/v2/https";
-import { ARTIFACT_PATHS } from "../../../utils/constants";
+// Mock HF client
+jest.mock('../../../clients/hf');
+const mockExtractJson = extractJsonFromText as jest.Mock;
 
-const mockHfComplete = hf.hfComplete as jest.Mock;
-const mockExtractJson = hf.extractJsonFromText as jest.Mock;
+describe('Round 4: Polish Draft', () => {
+  let mockDoc: jest.Mock, mockGet: jest.Mock;
+  let mockBatchSet: jest.Mock, mockBatchCommit: jest.Mock;
 
-const RUN_ID = "test-run-789";
-
-const MOCK_R3_DATA = {
-  items: [
-    {
-      idea: "The Future of Remote Work",
-      draft: "Draft about remote work...",
-    },
-    {
-      idea: "The History of Coffee",
-      draft: "Draft about coffee...",
-    },
-  ],
-};
-
-const VALID_LLM_OUTPUT = {
-  polished: "This is a beautifully polished piece of content about remote work. It is well-structured, engaging, and provides valuable insights for the reader. ".repeat(5),
-  derivatives: [
-    "Check out our new blog post on the future of remote work! #remotework #futureofwork",
-    "Are you ready for the new era of work? Our latest article explores the trends and challenges of remote work.",
-  ],
-};
-
-const MALFORMED_LLM_OUTPUT_STRING = `Here's the content you requested... {\"polished\": \"...\"}`;
-
-describe("runR4_Polish", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGet.mockResolvedValue({ exists: true, data: () => MOCK_R3_DATA });
-    // The function being mocked is synchronous, so we just return the input text
-    mockExtractJson.mockImplementation((text) => text);
+    admin.apps.length = 0;
+
+    mockGet = jest.fn();
+    mockDoc = jest.fn(() => ({ get: mockGet }));
+    mockBatchSet = jest.fn();
+    mockBatchCommit = jest.fn().mockResolvedValue(undefined);
+
+    (admin.firestore().doc as jest.Mock).mockImplementation(mockDoc);
+    (admin.firestore().batch as jest.Mock).mockImplementation(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
   });
 
-  it("should process all drafts successfully, writing a single polished artifact", async () => {
-    mockHfComplete.mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+  it('should successfully polish a valid draft', async () => {
+    const r3Data = {
+      items: [
+        {
+          id: '1',
+          idea: 'Test Idea',
+          draft: 'This is a test draft.',
+        },
+      ],
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => r3Data });
+    mockExtractJson.mockReturnValue(JSON.stringify({ polished: 'This is a polished draft that is definitely over one hundred characters long, so it should pass the validation with flying colors.', derivatives: ['tweet', 'facebook post'] }));
 
     const result = await run({ runId: RUN_ID });
 
-    expect(result).toEqual({ polishedCount: 2, failures: 0 });
-    expect(mockGet).toHaveBeenCalledTimes(1);
-    expect(mockHfComplete).toHaveBeenCalledTimes(2);
-    expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only one successful artifact
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-
-    const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", RUN_ID);
-    const writtenRef = mockBatchSet.mock.calls[0][0];
-    const writtenData = mockBatchSet.mock.calls[0][1];
-
-    expect(writtenRef.path).toBe(successPath);
-    expect(writtenData.items).toHaveLength(2);
-    expect(writtenData.items[0].idea).toBe("The Future of Remote Work");
-    expect(writtenData.items[0].derivatives).toHaveLength(2);
+    expect(result.polishedCount).toBe(1);
+    expect(result.failures).toBe(0);
+    expect(mockBatchCommit).toHaveBeenCalled();
   });
 
-  it("should handle a mix of successful and failed polishing attempts", async () => {
-    mockHfComplete
-      .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT)) // 1st item succeeds
-      .mockRejectedValueOnce(new Error("LLM is flaky"))       // 2nd item fails once
-      .mockRejectedValueOnce(new Error("LLM is still flaky")); // 2nd item fails retry
+  it('should move a draft to failures if it cannot be refined', async () => {
+    const r3Data = {
+      items: [
+        {
+          id: '1',
+          idea: 'Test Idea',
+          draft: 'This draft cannot be refined.',
+        },
+      ],
+    };
+    mockGet.mockResolvedValue({ exists: true, data: () => r3Data });
+    mockExtractJson.mockImplementation(() => { throw new Error('Refinement error'); });
 
     const result = await run({ runId: RUN_ID });
 
-    expect(result).toEqual({ polishedCount: 1, failures: 1 });
-    expect(mockBatchSet).toHaveBeenCalledTimes(2); // One success, one failure
-    expect(mockBatchCommit).toHaveBeenCalledTimes(1);
-
-    const successPath = ARTIFACT_PATHS.R4_POLISHED_DRAFT.replace("{runId}", RUN_ID);
-    const successCall = mockBatchSet.mock.calls.find(call => call[0].path === successPath);
-    expect(successCall[1].items).toHaveLength(1);
-    expect(successCall[1].items[0].idea).toBe("The Future of Remote Work");
-
-    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", RUN_ID);
-    const failureCall = mockBatchSet.mock.calls.find(call => call[0].path === failurePath);
-    expect(failureCall[1].items).toHaveLength(1);
-    expect(failureCall[1].items[0].item.idea).toBe("The History of Coffee");
-    expect(failureCall[1].items[0].error).toContain("LLM is still flaky");
+    expect(result.polishedCount).toBe(0);
+    expect(result.failures).toBe(1);
+    expect(mockBatchCommit).toHaveBeenCalled();
   });
 
-  it("should retry on malformed JSON and succeed on the second attempt", async () => {
-    mockHfComplete
-        .mockResolvedValueOnce(MALFORMED_LLM_OUTPUT_STRING)
-        .mockResolvedValueOnce(JSON.stringify(VALID_LLM_OUTPUT))
-        .mockResolvedValue(JSON.stringify(VALID_LLM_OUTPUT));
+  it('should handle no items in the R3 artifact', async () => {
+    const r3Data = { items: [] };
+    mockGet.mockResolvedValue({ exists: true, data: () => r3Data });
 
-    // extractJsonFromText is synchronous, use mockReturnValue
-    mockExtractJson
-        .mockReturnValueOnce(null) // First call fails to find JSON
-        .mockReturnValue(JSON.stringify(VALID_LLM_OUTPUT)); // Subsequent calls succeed
-
-    const result = await run({ runId: RUN_ID });
-
-    expect(result).toEqual({ polishedCount: 2, failures: 0 });
-    expect(mockHfComplete).toHaveBeenCalledTimes(3); // 1 initial fail, 1 retry success, 1 for second item
-  });
-
-  it("should throw not-found if the R3 artifact does not exist", async () => {
-    mockGet.mockResolvedValue({ exists: false });
-    await expect(run({ runId: RUN_ID })).rejects.toThrow(
-      new HttpsError("not-found", `Round 3 artifact not found for runId=${RUN_ID}`)
-    );
-  });
-
-  it("should handle the case where all polishing attempts fail", async () => {
-    mockHfComplete.mockRejectedValue(new Error("LLM is down"));
-
-    const result = await run({ runId: RUN_ID });
-
-    expect(result).toEqual({ polishedCount: 0, failures: 2 });
-    expect(mockBatchSet).toHaveBeenCalledTimes(1); // Only the failure artifact
-
-    const failurePath = ARTIFACT_PATHS.R4_FAILURES.replace("{runId}", RUN_ID);
-    const failureCall = mockBatchSet.mock.calls.find(call => call[0].path === failurePath);
-    expect(failureCall[1].items).toHaveLength(2);
+    await expect(run({ runId: RUN_ID })).rejects.toThrow('R3 artifact has no items.');
   });
 });

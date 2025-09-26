@@ -1,8 +1,8 @@
-// src/rounds/r7_publish.ts
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { httpClient } from "../clients/http";
 import { env } from "../utils/config";
 import { JobPayload } from "../utils/types";
+import * as admin from "firebase-admin";
 
 type Round6Doc = {
   trendId: string;
@@ -89,6 +89,9 @@ async function publishToWP({
 }
 
 export async function run(payload: JobPayload) {
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
   const { runId } = payload;
   if (!runId) throw new Error("runId is required");
 

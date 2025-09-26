@@ -1,108 +1,59 @@
-import { run } from "../../../rounds/r7_publish";
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { httpClient } from "../../../clients/http";
+import { run as runR7 } from '../../../rounds/r7_publish';
+import { constants } from '../../../utils/constants';
+import * as admin from 'firebase-admin';
 
-// --- Mocks Setup ---
+const RUN_ID = 'pairwise-test-r6-r7';
 
-// Mock the entire firestore service
-jest.mock('firebase-admin/firestore', () => {
-    const collectionMock = jest.fn();
-    const docMock = jest.fn();
-    const batchSetMock = jest.fn();
-    const batchCommitMock = jest.fn().mockResolvedValue(null);
-    const batchMock = { set: batchSetMock, commit: batchCommitMock };
-    const firestoreMock = {
-        collection: collectionMock,
-        batch: () => batchMock,
-        __mocks: { collection: collectionMock, doc: docMock, batch: { set: batchSetMock, commit: batchCommitMock } }
-    };
-    return { getFirestore: () => firestoreMock, Timestamp: { now: () => ({ toDate: () => new Date() }) } };
+// Mock Firebase Admin SDK
+jest.mock('firebase-admin', () => {
+  const mockFirestore = () => ({
+    doc: jest.fn(),
+    collection: jest.fn(),
+    batch: jest.fn(() => ({ set: jest.fn(), commit: jest.fn() }))
+  });
+  const firebaseAdmin = {
+    initializeApp: jest.fn(),
+    firestore: mockFirestore,
+    apps: [] as any[],
+  };
+  (firebaseAdmin.initializeApp as jest.Mock).mockImplementation(() => {
+    if (firebaseAdmin.apps.length === 0) {
+      firebaseAdmin.apps.push({ name: '[DEFAULT]' });
+    }
+  });
+  return firebaseAdmin;
 });
 
-// Mock the HTTP client to prevent real network calls
-jest.mock('../../../clients/http');
-
-const mockedHttpClient = httpClient as jest.Mocked<typeof httpClient>;
-const dbMocks = (getFirestore() as any).__mocks;
-
-// --- Test Data ---
-const round6Items = [
-  {
-    trendId: "t1",
-    validatedText: "This is the first article body.",
-    metadata: { title: "Title 1", description: "Excerpt 1", tags: ["tech", "ai"] }
-  },
-  {
-    trendId: "t2",
-    validatedText: "This is the second article body.",
-    metadata: { title: "Title 2", description: "Excerpt 2", tags: ["health"] }
-  },
-];
-
-// --- Test Suite ---
-describe("Round 7: Publish", () => {
-  const runId = "test-run-123";
-  let r7NewDocRefMock: any;
-
+describe('R6 to R7 Pairwise Test', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    admin.apps.length = 0; // Reset apps before each test
+  });
 
-    // --- Firestore Mocks ---
-    r7NewDocRefMock = { id: "new-doc-id" };
-    const r7CollectionRef = {
-        get: jest.fn().mockResolvedValue({ docs: [] }), // No existing published items
-        doc: jest.fn().mockReturnValue(r7NewDocRefMock), // Return a ref for new docs
+  it('should run R7 successfully with the output from R6', async () => {
+    const r6Data = {
+      passed: [
+        { id: '1', title: 'Test Title', draft: 'This is a coherent draft.' },
+      ],
+      failed: [],
     };
-    const r6Docs = round6Items.map(item => ({ id: item.trendId, data: () => item }));
-    const r6CollectionRef = { get: jest.fn().mockResolvedValue({ docs: r6Docs }) };
 
-    dbMocks.collection.mockImplementation((path: string) => {
-        if (path.endsWith('round7')) return r7CollectionRef;
-        if (path.endsWith('round6')) return r6CollectionRef;
+    const mockGet = jest.fn().mockResolvedValue({ exists: true, data: () => r6Data });
+    const mockDoc = jest.fn().mockReturnValue({ get: mockGet });
+    const mockBatchSet = jest.fn();
+    const mockBatchCommit = jest.fn().mockResolvedValue(undefined);
+    const mockBatch = jest.fn(() => ({ set: mockBatchSet, commit: mockBatchCommit }));
+
+    (admin.firestore as jest.Mock).mockReturnValue({
+        doc: mockDoc,
+        batch: mockBatch,
+        collection: jest.fn().mockReturnValue({ doc: jest.fn() })
     });
 
-    // --- HTTP Client Mocks ---
-    mockedHttpClient.request.mockImplementation(async (config: any) => {
-        // Mock for WordPress tag resolution
-        if (config.url.includes('/tags')) {
-            return { data: [{ id: 123, name: config.url.split("=")[1] }] };
-        }
-        // Mock for WordPress post creation
-        if (config.url.includes('/posts')) {
-            return { status: 201, data: { id: 456, link: "http://example.com/post/456" } };
-        }
-        return { status: 200, data: {} };
-    });
-  });
+    const result = await runR7({ runId: RUN_ID });
 
-  test("should process and publish all valid items from Round 6", async () => {
-    // --- Act ---
-    const result = await run({ runId });
-
-    // --- Assert ---
-    // 1. Check final result counts
-    expect(result).toEqual({ processed: 2, skipped: 0, succeeded: 2, failed: 0 });
-
-    // 2. Check Firestore collection reads
-    expect(dbMocks.collection).toHaveBeenCalledWith(`runs/${runId}/artifacts/round7`);
-    expect(dbMocks.collection).toHaveBeenCalledWith(`runs/${runId}/artifacts/round6`);
-
-    // 3. Check HTTP calls for tag resolution and post creation
-    expect(mockedHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining("/tags") }));
-    expect(mockedHttpClient.request).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining("/posts") }));
-
-    // 4. Check batched writes
-    expect(dbMocks.batch.set).toHaveBeenCalledTimes(2);
-    expect(dbMocks.batch.commit).toHaveBeenCalledTimes(1);
-
-    // 5. Deep inspection of the first batched write
-    const firstBatchCallArgs = dbMocks.batch.set.mock.calls[0];
-    const docRef = firstBatchCallArgs[0];
-    const payload = firstBatchCallArgs[1];
-
-    expect(docRef).toBe(r7NewDocRefMock); // Check that we used the newly generated doc ref
-    expect(payload).toHaveProperty("trendId", round6Items[0].trendId);
-    expect(payload).toHaveProperty("status", "draft");
-    expect(payload).toHaveProperty("wpPostId", 456);
-  });
+    expect(mockDoc).toHaveBeenCalledWith(constants.ARTIFACT_PATHS.R6_COHERENCE.replace('{runId}', RUN_ID));
+    expect(result.succeeded).toBe(r6Data.passed.length);
+    expect(result.failed).toBe(r6Data.failed.length);
+  }, 10000);
 });

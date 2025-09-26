@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { hfComplete } from "../clients/hf";
 import {
   Round1InputSchema,
@@ -41,7 +41,7 @@ const db = admin.firestore();
 // --- Helper Functions ---------------------------------------------------------
 
 async function getRound0Data(runId: string): Promise<TrendItem[]> {
-  const r0DocRef = db.doc(ARTIFACT_PATHS.R0_TRENDS.replace("{runId}", runId));
+  const r0DocRef = db.doc(constants.ARTIFACT_PATHS.R0_TRENDS.replace("{runId}", runId));
   const r0Snap = await r0DocRef.get();
   if (!r0Snap.exists) {
     throw new HttpsError("not-found", `Round0 artifact not found for runId=${runId}`);
@@ -119,7 +119,7 @@ async function writeArtifact(runId: string, items: IdeationItem[]): Promise<void
     throw new HttpsError("internal", "Round 1 Output validation failed");
   }
 
-  const r1ArtifactPath = ARTIFACT_PATHS.R1_IDEATION.replace("{runId}", runId);
+  const r1ArtifactPath = constants.ARTIFACT_PATHS.R1_IDEAS.replace("{runId}", runId);
   await db.doc(r1ArtifactPath).set({
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     ...validationResult.data,

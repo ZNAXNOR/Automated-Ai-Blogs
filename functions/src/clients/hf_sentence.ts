@@ -2,7 +2,7 @@ import { env } from "../utils/config";
 import { HttpsError } from "firebase-functions/v2/https";
 import { httpClient } from "./http";
 
-const HF_API_URL = `https://api-inference.huggingface.co/models/${env.hfModelR6}`;
+const BASE_URL = "https://api-inference.huggingface.co/models/";
 
 /**
  * Calculates sentence similarity scores using the Hugging Face Inference API.
@@ -15,44 +15,43 @@ export async function calculateSimilarity(
   sentences: string[]
 ): Promise<number[]> {
   if (!env.hfToken) {
-    throw new HttpsError("unauthenticated", "HUGGING_FACE_TOKEN is not set.");
+    throw new HttpsError("unauthenticated", "HF_TOKEN is not set.");
   }
-
-  const payload = {
-    inputs: {
-      source_sentence: source,
-      sentences: sentences,
-    },
-  };
 
   try {
     const res = await httpClient.request({
       method: "POST",
-      url: HF_API_URL,
-      data: payload,
+      url: `${BASE_URL}${env.hfModelR6}`,
+      data: {
+        inputs: {
+          source_sentence: source,
+          sentences: sentences,
+        },
+      },
       headers: {
-        Authorization: `Bearer ${env.hfToken}`,
-        "Content-Type": "application/json",
+        "Authorization": `Bearer ${env.hfToken}`,
       },
       timeout: 30000, // 30 seconds
     });
 
-    if (res.status !== 200) {
-      throw new HttpsError("internal", `Hugging Face API returned status ${res.status}`);
-    }
+    const scores = res.data;
 
-    const scores = res.data as number[] | null;
-
-    if (!Array.isArray(scores) || scores.some(s => typeof s !== 'number')) {
-      throw new HttpsError("internal", "Invalid response format from Hugging Face API");
+    if (!Array.isArray(scores) || scores.some((s) => typeof s !== "number")) {
+      console.error("Unexpected response format from Hugging Face API", scores);
+      throw new HttpsError("internal", "Unexpected response format from Hugging Face API");
     }
 
     return scores;
-
   } catch (error: any) {
-    if (error instanceof HttpsError) {
-      throw error;
+    if (error.response) {
+      console.error("Hugging Face API Error:", error.response.data);
+      throw new HttpsError("internal", `Hugging Face API returned status ${error.response.status}: ${JSON.stringify(error.response.data)}`);
+    } else if (error.request) {
+      console.error("Hugging Face API No Response:", error.request);
+      throw new HttpsError("internal", "No response received from Hugging Face API");
+    } else {
+      console.error("Hugging Face API Setup Error:", error.message);
+      throw new HttpsError("internal", "Error setting up request to Hugging Face API");
     }
-    throw new HttpsError("internal", "Error calling Hugging Face API", { detail: error.message });
   }
 }

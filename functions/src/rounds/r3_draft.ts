@@ -3,7 +3,7 @@ import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { z } from "zod";
 import { env } from "../utils/config";
 import { logger } from "../utils/logger";
-import { ARTIFACT_PATHS } from "../utils/constants";
+import { constants } from "../utils/constants";
 import { hfComplete } from "../clients/hf";
 import pLimit from "p-limit";
 import { JobPayload } from "../utils/types";
@@ -62,7 +62,7 @@ const db = admin.firestore();
 // --- Helper Functions ---------------------------------------------------------
 
 async function getRound2Data(runId: string): Promise<z.infer<typeof Round2OutputSchema>> {
-  const r2DocRef = db.doc(ARTIFACT_PATHS.R2_OUTLINE.replace("{runId}", runId));
+  const r2DocRef = db.doc(constants.ARTIFACT_PATHS.R2_OUTLINES.replace("{runId}", runId));
   const r2Snap = await r2DocRef.get();
   if (!r2Snap.exists) {
     throw new HttpsError("not-found", `Round 2 artifact not found for runId=${runId}`);
@@ -169,7 +169,7 @@ async function writeArtifact(
     throw new HttpsError("internal", "Round 3 Output validation failed");
   }
 
-  const r3ArtifactPath = ARTIFACT_PATHS.R3_DRAFT.replace("{runId}", runId);
+  const r3ArtifactPath = constants.ARTIFACT_PATHS.R3_DRAFTS.replace("{runId}", runId);
   await db.doc(r3ArtifactPath).set({
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     ...validationResult.data,

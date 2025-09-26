@@ -1,42 +1,50 @@
-// functions/src/index.ts
+/**
+ * Firebase Functions entrypoint
+ * Exposes callable + scheduled triggers for orchestrator
+ */
 
-import * as functions from 'firebase-functions';
-import * as admin from 'firebase-admin';
-import { runPipeline } from './src/utils/orchestrator';
+import * as functions from "firebase-functions";
+import { runOrchestrator } from "./src/utils/orchestrator";
+import { v4 as uuidv4 } from "uuid";
+import * as admin from "firebase-admin";
+import { newFunction } from "./new-function";
 
 admin.initializeApp();
 
-export const triggerMvpBlog = functions.https.onRequest(async (req, res) => {
-  // Optionally accept a seed input from req.body
-  const seedInput = req.body?.seed || null;
-
-  // For visibility: create a Firestore job doc
-  const jobRef = await admin.firestore().collection('mvp_jobs').add({
-    status: 'pending',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    seedInput
-  });
+/**
+ * Callable function: start a new blog pipeline run
+ */
+export const startBlogRun = functions.https.onCall(async (data, context) => {
+  const seeds: string[] = data?.seeds ?? [];
+  const runId: string = data?.runId ?? uuidv4();
 
   try {
-    const result = await runPipeline(seedInput);
-
-    await jobRef.update({
-      status: result.status,
-      payload: result.payload,
-      wpPostUrl: result.wpPostUrl || null,
-      wpPostId: result.wpPostId || null,
-      error: result.error || null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-
-    res.status(200).json({ jobId: jobRef.id, result });
+    const result = await runOrchestrator(runId, seeds);
+    return result;
   } catch (err: any) {
-    await jobRef.update({
-      status: 'failed',
-      error: err.message,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
-    });
-    res.status(500).json({ error: err.message });
+    throw new functions.https.HttpsError(
+      "internal",
+      "Pipeline execution failed",
+      err?.message || err
+    );
   }
+});
+
+/**
+ * Optional HTTP endpoint for triggering via cron / manual run
+ */
+export const startBlogRunHttp = functions.https.onRequest(async (req, res) => {
+  const seeds: string[] = req.body?.seeds ?? [];
+  const runId: string = uuidv4();
+
+  try {
+    const result = await runOrchestrator(runId, seeds);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || "Pipeline execution failed" });
+  }
+});
+
+export const myNewFunction = functions.https.onCall(async (data, context) => {
+    newFunction();
 });
