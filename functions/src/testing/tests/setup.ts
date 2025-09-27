@@ -1,4 +1,13 @@
-import * as dotenv from 'dotenv';
-import * as path from 'path';
+import * as admin from 'firebase-admin';
 
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+beforeAll(() => {
+  if (admin.apps.length === 0) {
+    admin.initializeApp();
+  }
+});
+
+afterAll(async () => {
+  await Promise.all(
+    admin.apps.map(app => (app ? app.delete() : Promise.resolve()))
+  );
+});

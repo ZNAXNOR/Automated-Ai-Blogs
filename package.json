@@ -4,7 +4,7 @@
   "description": "A simple Genkit app to generate fantasy characters",
   "main": "lib/full_blog_pipeline.js",
   "scripts": {
-    "test": "jest",
+    "test": "jest --config=functions/jest.config.js",
     "build": "npx tsc",
     "genkit:dev": "npx genkit start -- npx tsx --watch index.ts"
   },

@@ -3,6 +3,7 @@ import { httpClient } from "../clients/http";
 import { env } from "../utils/config";
 import { JobPayload } from "../utils/types";
 import * as admin from "firebase-admin";
+import { onCall } from "firebase-functions/v2/https";
 
 type Round6Doc = {
   trendId: string;
@@ -172,3 +173,10 @@ export async function run(payload: JobPayload) {
 
   return { processed, skipped, succeeded, failed };
 }
+
+export const Round7_Publish = onCall(
+  { timeoutSeconds: 300, memory: "256MiB", region: env.region },
+  (req) => run(req.data)
+);
+
+export const _test = { run };

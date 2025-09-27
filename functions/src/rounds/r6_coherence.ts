@@ -135,3 +135,5 @@ export const Round6_Coherence = onCall(
   { timeoutSeconds: 180, memory: "256MiB", region: env.region },
   (req) => run(req.data)
 );
+
+export const _test = { run };

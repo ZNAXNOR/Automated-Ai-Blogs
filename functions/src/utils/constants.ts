@@ -30,15 +30,15 @@ export const constants = {
 
     // --- Firestore Paths ---
     ARTIFACT_PATHS: {
-        R0_TRENDS: 'runs/{runId}/artifacts/round0',
-        R1_IDEAS: 'runs/{runId}/artifacts/round1',
-        R2_OUTLINES: 'runs/{runId}/artifacts/round2',
-        R3_DRAFTS: 'runs/{runId}/artifacts/round3',
-        R4_POLISHED: 'runs/{runId}/artifacts/round4',
-        R4_FAILURES: 'runs/{runId}/artifacts/round4-failures',
-        R5_METADATA: 'runs/{runId}/artifacts/round5',
-        R6_COHERENCE: 'runs/{runId}/artifacts/round6',
-        R7_PUBLISHED: 'runs/{runId}/artifacts/round7',
+        R0_TRENDS: 'runs/{runId}/artifacts/round0/data',
+        R1_IDEAS: 'runs/{runId}/artifacts/round1/data',
+        R2_OUTLINES: 'runs/{runId}/artifacts/round2/data',
+        R3_DRAFTS: 'runs/{runId}/artifacts/round3/data',
+        R4_POLISHED: 'runs/{runId}/artifacts/round4/data',
+        R4_FAILURES: 'runs/{runId}/artifacts/round4-failures/data',
+        R5_METADATA: 'runs/{runId}/artifacts/round5/data',
+        R6_COHERENCE: 'runs/{runId}/artifacts/round6/data',
+        R7_PUBLISHED: 'runs/{runId}/artifacts/round7/data',
     },
 
     // --- Caching ---
