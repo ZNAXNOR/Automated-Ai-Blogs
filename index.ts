@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-import { gemini15Flash, googleAI } from '@genkit-ai/googleai';
+import { googleAI } from '@genkit-ai/googleai';
 import { genkit, z } from 'genkit';
 
 const ai = genkit({
   plugins: [googleAI()],
 });
 
+const model = googleAI.model('gemini-2.5-flash');
+
 const prompt = ai.definePrompt({
   name: 'Character Prompt',
-  model: gemini15Flash,
+  model,
   input: {
     schema: z.object({
       inspiration: z.string(),

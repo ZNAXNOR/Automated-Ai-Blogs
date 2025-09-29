@@ -9,6 +9,15 @@
         "--only",
         "auth,firestore"
       ]
+    },
+    "genkit": {
+      "command": "genkit",
+      "args": [
+        "mcp"
+      ],
+      "cwd": "",
+      "timeout": 30000,
+      "trust": false
     }
   },
   "enabledTools": {
