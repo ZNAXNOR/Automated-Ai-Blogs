@@ -1,0 +1,15 @@
+export const BlogTopic = [
+    'Data Analytics',
+    'Dashboard Development',
+    'Conversion Rate Optimization',
+    'Ad Operations',
+    'User Experience',
+    'Frontend Development',
+    'Paid Search',
+    'Paid Social',
+    'Search Engine Optimization',
+    'Content Marketing',
+    'Organic Social Media',
+    'AI Search Optimization',
+    'Email Marketing',
+  ] as const;

@@ -8,12 +8,12 @@
     "esModuleInterop": true,
     "baseUrl": ".",
     "paths": {
-      "@utils/*": ["functions/utils/*"],
-      "@clients/*": ["functions/src/clients/*"],
-      "@src/*": ["functions/src/*"]
+      "@utils/*": ["src/utils/*"],
+      "@clients/*": ["src/clients/*"],
+      "@src/*": ["src/*"]
     },
     "types": ["jest"]
   },
-  "include": ["functions/src/**/*.ts", "functions/src/testing/tests/**/*.ts"],
+  "include": ["src/**/*.ts", "src/testing/tests/**/*.ts"],
   "exclude": ["node_modules"]
 }

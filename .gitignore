@@ -1,5 +1,13 @@
 test/
+
 node_modules/
+
 .genkit/
+
 *.js
+
 .env.*
+.env
+.secret.local
+
+*.log

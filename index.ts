@@ -1,50 +1,17 @@
-/**
- * Copyright 2025 Google LLC
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+import { startFlowServer } from '@genkit-ai/express';
 
-import { googleAI } from '@genkit-ai/googleai';
-import { genkit, z } from 'genkit';
 
-const ai = genkit({
-  plugins: [googleAI()],
+import {orchestrator} from './src/flows/orchestrator'
+
+import {r0_trends} from './src/flows/r0_trends'
+import {r1_ideate} from './src/flows/r1_ideate'
+import {r2_outline} from './src/flows/r2_outline'
+import {r3_draft} from './src/flows/r3_draft'
+import {r4_polish} from './src/flows/r4_polish'
+import {r5_meta} from './src/flows/r5_meta'
+import {r6_coherence} from './src/flows/r6_coherence'
+import {r7_publish} from './src/flows/r7_publish'
+
+startFlowServer({
+  flows: [orchestrator, r0_trends, r1_ideate, r2_outline, r3_draft, r4_polish, r5_meta, r6_coherence, r7_publish],
 });
-
-const model = googleAI.model('gemini-2.5-flash');
-
-const prompt = ai.definePrompt({
-  name: 'Character Prompt',
-  model,
-  input: {
-    schema: z.object({
-      inspiration: z.string(),
-    }),
-  },
-  output: {
-    format: 'json',
-    schema: z.object({
-      name: z.string(),
-      strength: z.number(),
-      intelligence: z.number(),
-      description: z.string(),
-    }),
-  },
-  prompt: `You're a expert DnD designer, create a new character.
-    Base the character on {{inspiration}} but don't make it
-    an exact match.`,
-});
-
-(async () => {
-  console.log((await prompt({ inspiration: 'Yogi Berra' })).output);
-})();
