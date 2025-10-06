@@ -14,6 +14,11 @@ CONSTRAINTS:
 - Keep JSON strictly valid.
 - Keep notes concise (max 2 sentences each).
 
+IMPORTANT OUTPUT RULES:
+- Return ONLY valid JSON that exactly matches the schema below.
+- Do NOT include any extra text, explanation, or Markdown code fences (no \`\`\`).
+- If you cannot fulfill the schema, return a valid empty JSON matching the schema shape.
+
 INPUT:
 Title:{{TITLE}}, SeoDescription:{{SEO_DESCRIPTION}}, Tags:{{TAGS}},
 Content:{{POLISHED}}

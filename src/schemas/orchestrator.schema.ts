@@ -1,6 +1,9 @@
+import { BlogTopic } from '@clients/blogTopic';
 import { z } from 'zod';
 
-export const orchestrator_input = z.void(); // no input required
+export const orchestrator_input = z.object({
+  topic: z.enum(BlogTopic).optional(),
+});
 
 export const orchestrator_output = z.object({
   title: z.string(),

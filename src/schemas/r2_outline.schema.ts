@@ -1,9 +1,25 @@
 import { z } from 'zod';
 
 export const r2_outline_input = z.object({
-      idea: z.array(z.string()),
-    });
-    
+  idea: z.array(
+    z.object({
+      title: z.string(),
+      rationale: z.string(),
+      seed: z.string(),
+    })
+  ),
+});
+
 export const r2_outline_output = z.object({
-      outline: z.string(),
-    });
+  outline: z.object({
+    title: z.string(),
+    sections: z.array(
+      z.object({
+        id: z.string(),
+        heading: z.string(),
+        bullets: z.array(z.string()),
+        estWords: z.number(),
+      })
+    ),
+  }),
+});

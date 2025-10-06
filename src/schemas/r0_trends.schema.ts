@@ -25,4 +25,3 @@ export const r0_trends_output = z.object({
     })
   ),
 });
-
