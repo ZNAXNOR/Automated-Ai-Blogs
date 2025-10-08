@@ -1,14 +1,14 @@
 import { ai } from '../clients/genkitInstance';
 
 // --- Import all rounds ---
-import { r0_trends } from './r0_trends';
-import { r1_ideate } from './r1_ideate';
-import { r2_outline } from './r2_outline';
-import { r3_draft } from './r3_draft';
-import { r4_polish } from './r4_polish';
-import { r5_meta } from './r5_meta';
-import { r6_coherence } from './r6_coherence';
-import { r7_publish } from './r7_publish';
+import { r0_trends } from './r0_trends.flow';
+import { r1_ideate } from './r1_ideate.flow';
+import { r2_outline } from './r2_outline.flow';
+import { r3_draft } from './r3_draft.flow';
+import { r4_polish } from './r4_polish.flow';
+import { r5_meta } from './r5_meta.flow';
+import { r6_coherence } from './r6_coherence.flow';
+import { r7_publish } from './r7_publish.flow';
 
 import { orchestrator_input, orchestrator_output } from '../schemas/orchestrator.schema';
 

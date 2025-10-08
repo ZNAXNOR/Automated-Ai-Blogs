@@ -1,9 +1,21 @@
-export * from './orchestrator';
-export * from './r0_trends';
-export * from './r1_ideate';
-export * from './r2_outline';
-export * from './r3_draft';
-export * from './r4_polish';
-export * from './r5_meta';
-export * from './r6_coherence';
-export * from './r7_publish';
+import {orchestrator} from './orchestrator.flow'
+import {r0_trends} from './r0_trends.flow'
+import {r1_ideate} from './r1_ideate.flow'
+import {r2_outline} from './r2_outline.flow'
+import {r3_draft} from './r3_draft.flow'
+import {r4_polish} from './r4_polish.flow'
+import {r5_meta} from './r5_meta.flow'
+import {r6_coherence} from './r6_coherence.flow'
+import {r7_publish} from './r7_publish.flow'
+
+export const flows = [
+  orchestrator,
+  r0_trends,
+  r1_ideate,
+  r2_outline,
+  r3_draft,
+  r4_polish,
+  r5_meta,
+  r6_coherence,
+  r7_publish,
+];

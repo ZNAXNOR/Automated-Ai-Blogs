@@ -1,3 +1,8 @@
+// src/prompts/r4_polish.prompt.ts
+import { ai } from '../src/clients/genkitInstance';
+import { z } from 'zod';
+import { r4_polish_output } from '../src/schemas/r4_polish.schema';
+
 export const brandVoice = `
 You are OdTech Lab's writing engine. Write in an entertaining, slightly cringy
 brand voice: knowledgeable, playful, helpful, and respectful. Use a maximum of
@@ -8,11 +13,36 @@ invent sources. When unsure, say "as of [DATE]" and suggest external
 verification.
 `;
 
-export const polishPrompt = `
+export const polishPrompt = ai.definePrompt({
+  name: 'r4_polish_prompt',
+  description: 'Polishes drafted sections to match OdTech Lab’s brand voice.',
+  model: 'googleai/gemini-2.0-flash',
+  input: {
+    schema: z.object({
+      sectionDraft: z.array(
+        z.object({
+          sectionId: z.string(),
+          content: z.string(),
+        })
+      ),
+      brandVoice: z.string(),
+    }),
+  },
+  output: {
+    schema: r4_polish_output,
+  },
+  config: {
+    temperature: 0.35,
+    maxOutputTokens: 4096,
+    // topK: 50,
+    // topP: 0.4,
+    // stopSequences: ['<end>', '<fin>'],
+  },
+  prompt: `
 SYSTEM: You are a copy editor enforcing brand voice and readability standards.
 
 BRAND_VOICE:
-{{BRAND_VOICE}}
+{{brandVoice}}
 
 TASK:
 Polish each section in SECTION_DRAFT to align with the brand voice while improving
@@ -38,28 +68,6 @@ IMPORTANT OUTPUT RULES:
 - If input is unclear or incomplete, return an empty valid JSON array.
 
 INPUT/SECTION_DRAFT:
-{{SECTION_DRAFT}}
-
-OUTPUT JSON SCHEMA:
-[
-  {
-    "sectionId": "string",
-    "content": "string",
-    "readability": { "fkGrade": 9.1 }
-  }
-]
-
-EXAMPLE OUTPUT:
-[
-  {
-    "sectionId": "s3",
-    "content": "Predictive analytics isn't just for data giants — small teams can use it too. As of 2025, free tools like Google Colab make data modeling easy for anyone [1]. Pro tip: start small, measure impact, then iterate fast.",
-    "readability": { "fkGrade": 8.7 }
-  },
-  {
-    "sectionId": "s4",
-    "content": "TL;DR: Clean data beats fancy models. Three-step checklist — 1) audit your sources, 2) remove outliers, 3) test consistency before scaling. This keeps predictions honest and actionable.",
-    "readability": { "fkGrade": 9.0 }
-  }
-]
-`;
+{{sectionDraft}}
+`,
+});

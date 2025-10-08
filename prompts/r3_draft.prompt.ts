@@ -1,4 +1,24 @@
-export const draftPrompt = `
+import { ai } from '../src/clients/genkitInstance';
+import { z } from 'zod';
+import { r3_draft_output } from '../src/schemas/r3_draft.schema';
+
+export const draftPrompt = ai.definePrompt({
+  name: 'r3_draft_prompt',
+  description: 'Expands a blog post outline into a full draft.',
+  model: 'googleai/gemini-2.0-flash',
+  input: {
+    schema: z.object({
+      outline: z.any(), // accept full outline object
+    }),
+  },
+  output: {
+    schema: r3_draft_output,
+  },
+  config: {
+    temperature: 0.45,
+    maxOutputTokens: 4096,
+  },
+  prompt: `
 SYSTEM: You are a knowledgeable, neutral blog writer expanding structured outlines into coherent drafts.
 
 TASK:
@@ -20,7 +40,7 @@ IMPORTANT OUTPUT RULES:
 - If input is missing or unclear, return an empty valid JSON array.
 
 INPUT/OUTLINE:
-{{OUTLINE}}
+{{outline}}
 
 OUTPUT JSON SCHEMA:
 [
@@ -38,4 +58,5 @@ EXAMPLE OUTPUT:
     "content": "A clean and organized dataset is the foundation of accurate predictions. Before modeling, businesses must remove duplicates, handle missing values, and ensure all data points are relevant. Automated tools like Python’s Pandas or Google DataPrep can simplify preprocessing [1]. Consistent formatting reduces the risk of biased outcomes [2]."
   }
 ]
-`;
+  `,
+});

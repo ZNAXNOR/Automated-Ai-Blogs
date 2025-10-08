@@ -1,4 +1,24 @@
-export const outlinePrompt = `
+import { ai } from '../src/clients/genkitInstance';
+import { z } from 'zod';
+import { r2_outline_output } from '../src/schemas/r2_outline.schema';
+
+export const outlinePrompt = ai.definePrompt({
+  name: 'r2_outline_prompt',
+  description: 'Creates a detailed blog post outline from a topic idea.',
+  model: 'googleai/gemini-2.0-flash',
+  input: {
+    schema: z.object({
+      topicIdea: z.any(), // array of ideas, flexible
+    }),
+  },
+  output: {
+    schema: r2_outline_output,
+  },
+  config: {
+    temperature: 0.35,
+    maxOutputTokens: 2048,
+  },
+  prompt: `
 SYSTEM: You are a technical editor who builds structured blog outlines from topic ideas.
 
 TASK:
@@ -18,7 +38,7 @@ IMPORTANT OUTPUT RULES:
 - If input is unclear, return an empty JSON object in the same schema shape.
 
 INPUT/TOPIC_IDEA:
-{{TOPIC_IDEA}}
+{{topicIdea}}
 
 OUTPUT JSON SCHEMA:
 {
@@ -69,4 +89,5 @@ EXAMPLE OUTPUT:
     }
   ]
 }
-`;
+  `,
+});
