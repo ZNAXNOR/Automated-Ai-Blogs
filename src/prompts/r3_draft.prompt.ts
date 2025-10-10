@@ -1,6 +1,6 @@
-import { ai } from '../src/clients/genkitInstance';
+import { ai } from '../clients/genkitInstance';
 import { z } from 'zod';
-import { r3_draft_output } from '../src/schemas/r3_draft.schema';
+import { r3_draft_output } from '../schemas/r3_draft.schema';
 
 export const draftPrompt = ai.definePrompt({
   name: 'r3_draft_prompt',
@@ -15,8 +15,8 @@ export const draftPrompt = ai.definePrompt({
     schema: r3_draft_output,
   },
   config: {
-    temperature: 0.45,
-    maxOutputTokens: 4096,
+    temperature: 0.0,
+    // maxOutputTokens: 4096,
   },
   prompt: `
 SYSTEM: You are a knowledgeable, neutral blog writer expanding structured outlines into coherent drafts.
@@ -41,22 +41,5 @@ IMPORTANT OUTPUT RULES:
 
 INPUT/OUTLINE:
 {{outline}}
-
-OUTPUT JSON SCHEMA:
-[
-  { "sectionId": "string", "content": "string" }
-]
-
-EXAMPLE OUTPUT:
-[
-  {
-    "sectionId": "s1",
-    "content": "Predictive analytics allows small businesses to make data-driven decisions by anticipating customer behavior and market trends. It combines historical data with statistical modeling to reveal actionable insights [1]. For instance, a small retailer can predict which products are likely to sell faster during specific seasons and adjust stock accordingly [2]."
-  },
-  {
-    "sectionId": "s2",
-    "content": "A clean and organized dataset is the foundation of accurate predictions. Before modeling, businesses must remove duplicates, handle missing values, and ensure all data points are relevant. Automated tools like Python’s Pandas or Google DataPrep can simplify preprocessing [1]. Consistent formatting reduces the risk of biased outcomes [2]."
-  }
-]
   `,
 });

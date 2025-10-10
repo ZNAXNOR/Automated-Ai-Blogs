@@ -1,8 +1,7 @@
-import { BlogTopic } from '@clients/blogTopic';
 import { z } from 'zod';
 
 export const orchestrator_input = z.object({
-  topic: z.enum(BlogTopic).optional(),
+  topic: z.union([z.string(), z.array(z.string())]),
 });
 
 export const orchestrator_output = z.object({

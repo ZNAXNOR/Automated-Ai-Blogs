@@ -1,6 +1,6 @@
-import { ai } from '../src/clients/genkitInstance';
+import { ai } from '../clients/genkitInstance';
 import { z } from 'zod';
-import { r1_ideate_output } from '../src/schemas/r1_ideate.schema';
+import { r1_ideate_output } from '../schemas/r1_ideate.schema';
 
 export const ideationPrompt = ai.definePrompt({
   name: 'r1_ideate_prompt',
@@ -16,7 +16,7 @@ export const ideationPrompt = ai.definePrompt({
   },
   config: {
     temperature: 0.35,
-    maxOutputTokens: 2048,
+    // maxOutputTokens: 2048,
     // topK: 50,
     // topP: 0.4,
     // stopSequences: ['<end>', '<fin>'],

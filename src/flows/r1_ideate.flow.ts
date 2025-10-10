@@ -2,7 +2,7 @@ import { ai } from '../clients/genkitInstance';
 import { r1_ideate_input, r1_ideate_output } from '../schemas/r1_ideate.schema';
 import { safeParseJsonFromAI } from '@clients/aiParsing';
 
-console.log('[r1_ideate] Flow module loaded');
+console.log('[r1_ideate]      Flow module loaded');
 
 export const r1_ideate = ai.defineFlow(
   {
@@ -31,22 +31,27 @@ export const r1_ideate = ai.defineFlow(
       throw new Error('Prompt returned no usable result');
     }
 
-    let result;
+    let ideationObj;
     try {
-      result = safeParseJsonFromAI(raw);
+      ideationObj = safeParseJsonFromAI(raw);
     } catch (err) {
       console.error('[r1_ideate] JSON parse failed', { raw, err });
       throw new Error('Failed to parse prompt output');
     }
 
     try {
-      r1_ideate_output.parse(result);
+      r1_ideate_output.parse(ideationObj);
     } catch (err) {
-      console.error('[r1_ideate] Schema validation failed', { result, err });
+      console.error('[r1_ideate] Schema validation failed', { ideationObj, err });
       throw new Error('Prompt output did not match schema for r1_ideate');
     }
+    if (!ideationObj.ideas || ideationObj.ideas.length === 0) {
+      console.error('[r1_ideate] No ideas generated');
+      throw new Error('No ideas were generated from the prompt.');
+    }
 
-    console.log('[r1_ideate] ✅ Success:', result.ideas?.length ?? 0, 'ideas generated');
-    return result;
+
+    console.log('[r1_ideate] ✅ Success:', ideationObj.ideas?.length ?? 0, 'ideas generated');
+    return ideationObj;
   }
 );

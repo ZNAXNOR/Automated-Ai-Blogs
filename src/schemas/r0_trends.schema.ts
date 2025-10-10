@@ -1,27 +1,33 @@
 import { z } from 'zod';
-import { BlogTopic } from '../clients/blogTopic';
-
-const blogTopic = z.enum(BlogTopic);
 
 export const r0_trends_input = z.object({
-  topic: blogTopic,
-  timeframe: z.string().optional(),       // e.g. "now 7-d", "today 12-m"
-  geo: z.string().optional(),              // e.g. "IN", "US"
-  relatedLimit: z.number().optional(),     // how many related queries
+  topic: z.union([z.string(), z.array(z.string())]),
+  geo: z.string().optional(),
+  timeframe: z.string().optional(),
+  category: z.number().optional(),
+  relatedLimit: z.number().optional(),
+});
+
+const trendSuggestion = z.object({
+  topic: z.string(),
+  score: z.number(),
+});
+
+const trendTimelinePoint = z.object({
+  time: z.date(),
+  value: z.number(),
 });
 
 export const r0_trends_output = z.object({
-  baseTopic: z.string(),
-  suggestions: z.array(
+  baseTopic: z.string().optional(),          // if single topic
+  aggregatedTopics: z.array(z.string()).optional(), // list of all processed topics
+  suggestions: z.array(trendSuggestion),     // flattened + normalized aggregate
+  trendTimeline: z.array(trendTimelinePoint),// merged average timeline (optional)
+  results: z.array(                          // per-topic grouped output
     z.object({
       topic: z.string(),
-      score: z.number(),
+      suggestions: z.array(trendSuggestion),
+      trendTimeline: z.array(trendTimelinePoint),
     })
-  ),
-  trendTimeline: z.array(
-    z.object({
-      time: z.coerce.date(),
-      value: z.number(),
-    })
-  ),
+  ).optional(),
 });

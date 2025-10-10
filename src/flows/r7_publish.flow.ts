@@ -7,6 +7,8 @@ const WP_API_URL = process.env.WP_API_URL || 'https://odlabagency.wpcomstaging.c
 const WP_USERNAME = process.env.WP_USERNAME || 'odomkardalvi';
 const WP_PASSWORD = defineSecret('WP_PASSWORD');
 
+console.log('[r7_publish]     Flow module loaded');
+
 export const r7_publish = ai.defineFlow(
   {
     name: 'r7_publish',
@@ -45,6 +47,11 @@ export const r7_publish = ai.defineFlow(
 
     console.log('[r7_publish] Response status:', resp.status);
 
+    if (!resp.data.id || !resp.data.link || !resp.data.status) {
+      console.error('[r7_publish] Invalid response from WordPress API');
+      throw new Error('Invalid response from WordPress API.');
+    }
+
     return {
       id: resp.data.id,
       link: resp.data.link,
@@ -53,4 +60,3 @@ export const r7_publish = ai.defineFlow(
   }
 );
 
-console.log('Loading r7_publish flow definition');

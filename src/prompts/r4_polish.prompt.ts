@@ -1,7 +1,7 @@
 // src/prompts/r4_polish.prompt.ts
-import { ai } from '../src/clients/genkitInstance';
+import { ai } from '../clients/genkitInstance';
 import { z } from 'zod';
-import { r4_polish_output } from '../src/schemas/r4_polish.schema';
+import { r4_polish_output } from '../schemas/r4_polish.schema';
 
 export const brandVoice = `
 You are OdTech Lab's writing engine. Write in an entertaining, slightly cringy
@@ -32,8 +32,8 @@ export const polishPrompt = ai.definePrompt({
     schema: r4_polish_output,
   },
   config: {
-    temperature: 0.35,
-    maxOutputTokens: 4096,
+    temperature: 0.0,
+    // maxOutputTokens: 4096,
     // topK: 50,
     // topP: 0.4,
     // stopSequences: ['<end>', '<fin>'],

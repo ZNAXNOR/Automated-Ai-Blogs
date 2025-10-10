@@ -3,7 +3,7 @@ import { ai } from '../clients/genkitInstance';
 import { r6_coherence_input, r6_coherence_output } from '../schemas/r6_coherence.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing';
 
-console.log('[r6_coherence] Flow module loaded');
+console.log('[r6_coherence]   Flow module loaded');
 
 export const r6_coherence = ai.defineFlow(
   {
@@ -61,6 +61,11 @@ export const r6_coherence = ai.defineFlow(
         error: err,
       });
       throw new Error('Output validation failed for r6_coherence');
+    }
+
+    if (!coherenceObj.overall) {
+      console.error('[r6_coherence] No coherence score generated');
+      throw new Error('No coherence score was generated from the prompt.');
     }
 
     // ---- Success summary ----

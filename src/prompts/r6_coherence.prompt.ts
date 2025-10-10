@@ -1,12 +1,12 @@
 // src/prompts/r6_coherence.prompt.ts
-import { ai } from '../src/clients/genkitInstance';
+import { ai } from '../clients/genkitInstance';
 import { z } from 'zod';
-import { r6_coherence_output } from '../src/schemas/r6_coherence.schema';
+import { r6_coherence_output } from '../schemas/r6_coherence.schema';
 
 export const coherencePrompt = ai.definePrompt({
   name: 'r6_coherence_prompt',
   description: 'Analyzes blog coherence, redundancy, and logical flow without rewriting content.',
-  model: 'gemini-2.0-flash',
+  model: 'googleai/gemini-2.0-flash',
   input: {
     schema: z.object({
       title: z.string(),

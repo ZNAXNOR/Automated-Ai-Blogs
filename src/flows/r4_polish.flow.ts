@@ -1,9 +1,9 @@
 import { ai } from '../clients/genkitInstance';
 import { r4_polish_input, r4_polish_output } from '../schemas/r4_polish.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing';
-import { brandVoice } from '../../prompts/r4_polish.prompt';
+import { brandVoice } from '../prompts/r4_polish.prompt';
 
-console.log('[r4_polish] Flow module loaded');
+console.log('[r4_polish]      Flow module loaded');
 
 export const r4_polish = ai.defineFlow(
   {
@@ -56,6 +56,11 @@ export const r4_polish = ai.defineFlow(
     } catch (err) {
       console.error('[r4_polish] Schema validation failed', { parsed: polishObj, error: err });
       throw new Error('Output validation failed for r4_polish');
+    }
+
+    if (!polishObj.polished || polishObj.polished.length === 0) {
+      console.error('[r4_polish] No polished content generated');
+      throw new Error('No polished content was generated from the prompt.');
     }
     
     console.log('[r4_polish] ✅ Success:', polishObj.polished?.length ?? 0, 'sections polished');

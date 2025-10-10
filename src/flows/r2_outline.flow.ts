@@ -2,7 +2,7 @@ import { ai } from '../clients/genkitInstance';
 import { r2_outline_input, r2_outline_output } from '../schemas/r2_outline.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing';
 
-console.log('[r2_outline] Flow module loaded');
+console.log('[r2_outline]     Flow module loaded');
 
 export const r2_outline = ai.defineFlow(
   {
@@ -30,22 +30,27 @@ export const r2_outline = ai.defineFlow(
       throw new Error('Prompt returned no usable result');
     }
 
-    let parsed;
+    let outlineObj;
     try {
-      parsed = safeParseJsonFromAI(raw);
+      outlineObj = safeParseJsonFromAI(raw);
     } catch (err) {
       console.error('[r2_outline] JSON parse failed', { raw, err });
       throw new Error('Failed to parse prompt output');
     }
 
     try {
-      r2_outline_output.parse(parsed);
+      r2_outline_output.parse(outlineObj);
     } catch (err) {
-      console.error('[r2_outline] Schema validation failed', { parsed, err });
+      console.error('[r2_outline] Schema validation failed', { outlineObj, err });
       throw new Error('Prompt output did not match schema for r2_outline');
     }
 
-    console.log('[r2_outline] ✅ Success:', parsed.sections?.length ?? 0, 'sections generated');
-    return parsed;
+    if (!outlineObj.outline.sections || outlineObj.outline.sections.length === 0) {
+      console.error('[r2_outline] No sections generated');
+      throw new Error('No sections were generated from the prompt.');
+    }
+
+    console.log('[r2_outline] ✅ Success:', outlineObj.outline.sections?.length ?? 0, 'sections generated');
+    return outlineObj;
   }
 );

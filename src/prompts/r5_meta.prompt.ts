@@ -1,12 +1,12 @@
 // src/prompts/r5_meta.prompt.ts
-import { ai } from '../src/clients/genkitInstance';
+import { ai } from '../clients/genkitInstance';
 import { z } from 'zod';
-import { r5_meta_output } from '../src/schemas/r5_meta.schema';
+import { r5_meta_output } from '../schemas/r5_meta.schema';
 
 export const metaPrompt = ai.definePrompt({
   name: 'r5_meta_prompt',
   description: 'Generates SEO metadata and image generation prompts for a blog post.',
-  model: 'gemini-2.0-flash',
+  model: 'googleai/gemini-2.0-flash',
   input: {
     schema: z.object({
       polished: z.array(
@@ -46,7 +46,7 @@ IMPORTANT OUTPUT RULES:
 - Return ONLY valid JSON exactly matching the schema below.
 - Do NOT include Markdown, code fences (\`\`\`), or extra commentary.
 - Strings must use double quotes only.
-- If input is unclear or insufficient, return an empty valid JSON structure.
+- If uncertain, make your best reasonable assumption and fill all fields. Never leave fields empty — use placeholders if absolutely necessary.
 
 INPUT/POLISHED:
 {{polished}}

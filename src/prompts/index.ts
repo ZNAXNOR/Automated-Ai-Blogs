@@ -14,4 +14,4 @@ export { polishPrompt } from './r4_polish.prompt';
 export { metaPrompt } from './r5_meta.prompt';
 export { coherencePrompt } from './r6_coherence.prompt';
 
-console.log('[DotPrompt] All prompt modules registered');
+console.log('[DotPrompt]      All prompt modules registered');

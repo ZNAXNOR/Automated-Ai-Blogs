@@ -2,7 +2,7 @@ import { ai } from '../clients/genkitInstance';
 import { r5_meta_input, r5_meta_output } from '../schemas/r5_meta.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing';
 
-console.log('[r5_meta] Flow module loaded');
+console.log('[r5_meta]        Flow module loaded');
 
 export const r5_meta = ai.defineFlow(
   {
@@ -45,7 +45,6 @@ export const r5_meta = ai.defineFlow(
       throw new Error('Failed to parse model output in r5_meta');
     }
 
-    // Normalize alternate nesting
     if (metaObj.meta) {
       metaObj.title = metaObj.meta.seoTitle ?? metaObj.meta.title;
       metaObj.seoDescription = metaObj.meta.metaDescription;
@@ -58,6 +57,11 @@ export const r5_meta = ai.defineFlow(
     } catch (err) {
       console.error('[r5_meta] Schema validation failed', { parsed: metaObj, error: err });
       throw new Error('Output validation failed for r5_meta');
+    }
+
+    if (!metaObj.title || !metaObj.seoDescription || !metaObj.slug) {
+      console.error('[r5_meta] Empty metadata generated');
+      throw new Error('Empty metadata was generated from the prompt.');
     }
 
     console.log('[r5_meta] ✅ Success: metadata generated for', metaObj.title);
