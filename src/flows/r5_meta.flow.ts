@@ -1,12 +1,12 @@
-import { ai } from '../clients/genkitInstance';
-import { r5_meta_input, r5_meta_output } from '../schemas/r5_meta.schema';
-import { safeParseJsonFromAI } from '../clients/aiParsing';
+import { ai } from '../clients/genkitInstance.client';
+import { r5_meta_input, r5_meta_output } from '../schemas/flows/r5_meta.schema';
+import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 
 console.log('[r5_meta]        Flow module loaded');
 
 export const r5_meta = ai.defineFlow(
   {
-    name: 'r5_meta',
+    name: 'Round5_Metadata',
     inputSchema: r5_meta_input,
     outputSchema: r5_meta_output,
   },
@@ -15,7 +15,7 @@ export const r5_meta = ai.defineFlow(
       totalSections: input.polished?.length ?? 0,
     });
 
-    const promptFn = ai.prompt('r5_meta_prompt');
+    const promptFn = ai.prompt('Round5_MetadataPrompt');
     let resp;
     try {
       resp = await promptFn({

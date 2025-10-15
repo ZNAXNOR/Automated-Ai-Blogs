@@ -91,7 +91,7 @@ export async function fetchGoogleTrends(params: GoogleTrendsParams) {
     try {
         console.log(`[googleTrendsClient] Fetching from SerpAPI with fallback params:`, apiParams);
         const resp = await axios.get('https://serpapi.com/search.json', { params: apiParams });
-        console.log(`[googleTrendsClient] SerpAPI fallback response for topic "${topic}":`, resp.data);
+        // console.log(`[googleTrendsClient] SerpAPI fallback response for topic "${topic}":`, resp.data);
         const fallbackResult = processSerpApiResponse(resp.data || {});
         console.log('[googleTrendsClient] Fallback request succeeded.');
         return fallbackResult;

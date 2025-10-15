@@ -1,35 +1,89 @@
-import { ai } from '../clients/genkitInstance';
-import { r1_ideate_input, r1_ideate_output } from '../schemas/r1_ideate.schema';
-import { safeParseJsonFromAI } from '@clients/aiParsing';
+import { ai } from '../clients/genkitInstance.client';
+import { r1_ideate_input, r1_ideate_output } from '../schemas/flows/r1_ideate.schema';
+import { safeParseJsonFromAI } from '../clients/aiParsing.client';
+import admin from 'firebase-admin';
+import { fetchNewsForTopics } from '../clients/googleNews.client';
+import { googleSearchTool } from '../tools/googleSearch.tool'; // conditional tool
 
 console.log('[r1_ideate]      Flow module loaded');
 
+// ---------- Firestore init ----------
+if (!admin.apps.length) admin.initializeApp();
+const firestore = admin.firestore();
+
+// ---------- Optional artifact saver ----------
+let saveArtifact: ((key: string, value: any) => Promise<void>) | undefined;
+try {
+  const artifacts = require('../lib/artifacts');
+  saveArtifact = artifacts?.saveArtifact;
+} catch {}
+
+// ---------- Helper: pick best topic list ----------
+function pickTopicArray(input: any): string[] | null {
+  if (input.results && input.results.length > 0) {
+    const sorted = [...input.results].sort((a, b) => {
+      const sum = (arr: any[]) => arr.reduce((s, x) => s + (x.score || 0), 0);
+      return sum(b.suggestions || []) - sum(a.suggestions || []);
+    });
+    const chosen = sorted.find((r) => r.suggestions && r.suggestions.length > 0);
+    if (chosen) return chosen.suggestions.map((s: any) => s.topic);
+  }
+  if (input.aggregatedTopics?.length) return input.aggregatedTopics;
+  if (input.topic) return [input.topic];
+  if (input.seedPrompt) return [input.seedPrompt];
+  return null;
+}
+
+// ---------- Main flow ----------
 export const r1_ideate = ai.defineFlow(
   {
-    name: 'r1_ideate',
+    name: 'Round1_Ideation',
     inputSchema: r1_ideate_input,
     outputSchema: r1_ideate_output,
   },
   async (input) => {
     console.log('[r1_ideate] Flow invoked with input:', input);
-    const topic = input.topic ?? input.seedPrompt ?? 'general tech trends';
-    console.log('[r1_ideate] Using topic:', topic);
+    const parsedInput = r1_ideate_input.parse(input);
 
-    const promptFn = ai.prompt('r1_ideate_prompt');
+    const topicArray = pickTopicArray(parsedInput);
+    if (!topicArray?.length) throw new Error('No usable topic array found in input.');
+
+    // 1️⃣ Fetch related news
+    let headlines = await fetchNewsForTopics(topicArray);
+
+    // 2️⃣ Decide whether to use search tool as a fallback.
+    const useSearchTool = !headlines?.length || headlines.length < 3;
+    if (useSearchTool) {
+      console.log('[r1_ideate] Using GoogleSearchTool fallback...');
+    }
+
+    const newsSummary = headlines.length
+      ? `Here are some recent headlines:\n${headlines.map((h) => `- ${h}`).join('\n')}`
+      : 'No related live news found; rely purely on trend input.';
+
+    // 3️⃣ Call prompt, dynamically providing tools if needed.
+    const promptFn = ai.prompt(
+      useSearchTool ? 'Round1_IdeationPrompt_With_Search' : 'Round1_IdeationPrompt'
+    );
     let resp;
     try {
-      resp = await promptFn({ trendInput: topic });
+      resp = await promptFn(
+        { // Prompt Input
+          trendInput: topicArray.join(', '),
+          recentNews: newsSummary,
+        },
+        { // Options
+          tools: useSearchTool ? [googleSearchTool] : [],
+        }
+      );
     } catch (err) {
       console.error('[r1_ideate] Prompt call failed:', err);
       throw new Error('Prompt execution error in r1_ideate');
     }
 
-    // `resp` might have `.text` or `.output` depending on prompt configuration
+    // 4️⃣ Parse model output
     const raw = resp.text ?? (resp.output ? JSON.stringify(resp.output) : undefined);
-    if (!raw) {
-      console.error('[r1_ideate] No output text or parsed output', resp);
-      throw new Error('Prompt returned no usable result');
-    }
+    if (!raw) throw new Error('Prompt returned no usable result');
 
     let ideationObj;
     try {
@@ -39,19 +93,46 @@ export const r1_ideate = ai.defineFlow(
       throw new Error('Failed to parse prompt output');
     }
 
+    // Add timestamp
+    ideationObj.timestamp = new Date().toISOString();
+
+    // 🔹 Normalize references before saving
+    if (ideationObj.references?.length) {
+      const seen = new Set();
+      ideationObj.references = ideationObj.references.filter((r: any) => {
+        if (!r?.url || seen.has(r.url)) return false;
+        seen.add(r.url);
+        return true;
+      });
+    }
+
+    // 5️⃣ Validate schema
+    r1_ideate_output.parse(ideationObj);
+
+    // 6️⃣ Persist to Firestore
     try {
-      r1_ideate_output.parse(ideationObj);
+      await firestore.collection('r1_ideate_results').add({
+        ...ideationObj,
+        topicsUsed: topicArray,
+        headlines,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        rawModelOutput: raw,
+        references: ideationObj.references || [],
+      });
     } catch (err) {
-      console.error('[r1_ideate] Schema validation failed', { ideationObj, err });
-      throw new Error('Prompt output did not match schema for r1_ideate');
-    }
-    if (!ideationObj.ideas || ideationObj.ideas.length === 0) {
-      console.error('[r1_ideate] No ideas generated');
-      throw new Error('No ideas were generated from the prompt.');
+      console.warn('r1_ideate: failed to persist to Firestore', err);
     }
 
+    // 7️⃣ Optional artifact
+    if (saveArtifact) {
+      try {
+        await saveArtifact('artifacts.round1', ideationObj);
+      } catch (err) {
+        console.warn('r1_ideate: failed to save artifact', err);
+      }
+    }
 
-    console.log('[r1_ideate] ✅ Success:', ideationObj.ideas?.length ?? 0, 'ideas generated');
+    console.log('[r1_ideate] ✅ Success:', ideationObj.title);
     return ideationObj;
   }
 );

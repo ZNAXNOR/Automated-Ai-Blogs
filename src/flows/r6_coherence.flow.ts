@@ -1,13 +1,13 @@
 // src/flows/r6_coherence.flow.ts
-import { ai } from '../clients/genkitInstance';
-import { r6_coherence_input, r6_coherence_output } from '../schemas/r6_coherence.schema';
-import { safeParseJsonFromAI } from '../clients/aiParsing';
+import { ai } from '../clients/genkitInstance.client';
+import { r6_coherence_input, r6_coherence_output } from '../schemas/flows/r6_coherence.schema';
+import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 
 console.log('[r6_coherence]   Flow module loaded');
 
 export const r6_coherence = ai.defineFlow(
   {
-    name: 'r6_coherence',
+    name: 'Round6_Coherence',
     inputSchema: r6_coherence_input,
     outputSchema: r6_coherence_output,
   },
@@ -19,7 +19,7 @@ export const r6_coherence = ai.defineFlow(
       tagCount: Array.isArray(input.tags) ? input.tags.length : 0,
     });
 
-    const promptFn = ai.prompt('r6_coherence_prompt');
+    const promptFn = ai.prompt('Round6_CoherencePrompt');
     let resp;
     try {
       resp = await promptFn({

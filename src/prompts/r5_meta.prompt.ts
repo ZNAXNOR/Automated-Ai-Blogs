@@ -1,10 +1,10 @@
 // src/prompts/r5_meta.prompt.ts
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r5_meta_output } from '../schemas/r5_meta.schema';
+import { r5_meta_output } from '../schemas/flows/r5_meta.schema';
 
 export const metaPrompt = ai.definePrompt({
-  name: 'r5_meta_prompt',
+  name: 'Round5_MetadataPrompt',
   description: 'Generates SEO metadata and image generation prompts for a blog post.',
   model: 'googleai/gemini-2.0-flash',
   input: {

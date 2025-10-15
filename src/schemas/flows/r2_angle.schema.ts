@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const r2_outline_input = z.object({
+export const r2_angle_input = z.object({
   idea: z.array(
     z.object({
       title: z.string(),
@@ -10,7 +10,7 @@ export const r2_outline_input = z.object({
   ),
 });
 
-export const r2_outline_output = z.object({
+export const r2_angle_output = z.object({
   outline: z.object({
     title: z.string(),
     sections: z.array(

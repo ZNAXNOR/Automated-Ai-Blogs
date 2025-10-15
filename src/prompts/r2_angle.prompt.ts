@@ -1,9 +1,9 @@
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r2_outline_output } from '../schemas/r2_outline.schema';
+import { r2_angle_output } from '../schemas/flows/r2_angle.schema';
 
 export const outlinePrompt = ai.definePrompt({
-  name: 'r2_outline_prompt',
+  name: 'Round2_AnglePrompt',
   description: 'Creates a detailed blog post outline from a topic idea.',
   model: 'googleai/gemini-2.0-flash',
   input: {
@@ -12,7 +12,7 @@ export const outlinePrompt = ai.definePrompt({
     }),
   },
   output: {
-    schema: r2_outline_output,
+    schema: r2_angle_output,
   },
   config: {
     temperature: 0.0,

@@ -11,3 +11,5 @@ node_modules/
 .secret.local
 
 *.log
+
+*.firebase-service-account.json

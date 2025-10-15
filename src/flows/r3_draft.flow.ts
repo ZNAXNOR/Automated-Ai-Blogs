@@ -1,12 +1,12 @@
-import { ai } from '../clients/genkitInstance';
-import { r3_draft_input, r3_draft_output } from '../schemas/r3_draft.schema';
-import { safeParseJsonFromAI } from '../clients/aiParsing';
+import { ai } from '../clients/genkitInstance.client';
+import { r3_draft_input, r3_draft_output } from '../schemas/flows/r3_draft.schema';
+import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 
 console.log('[r3_draft]       Flow module loaded');
 
 export const r3_draft = ai.defineFlow(
   {
-    name: 'r3_draft',
+    name: 'Round3_Draft',
     inputSchema: r3_draft_input,
     outputSchema: r3_draft_output,
   },
@@ -16,7 +16,7 @@ export const r3_draft = ai.defineFlow(
       sectionCount: input.outline?.sections?.length ?? 0,
     });
 
-    const promptFn = ai.prompt('r3_draft_prompt');
+    const promptFn = ai.prompt('Round3_DraftPrompt');
     let resp;
     try {
       resp = await promptFn({ outline: input.outline.sections });

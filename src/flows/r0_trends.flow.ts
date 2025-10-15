@@ -1,17 +1,20 @@
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import { defineSecret } from 'firebase-functions/params';
-import { r0_trends_input, r0_trends_output } from '../schemas/r0_trends.schema';
-import { fetchGoogleTrends } from '../clients/googleTrendsClient';
+import { r0_trends_input, r0_trends_output } from '../schemas/flows/r0_trends.schema';
+import { fetchGoogleTrends } from '../clients/googleTrends.client';
 import { normalizeTopicList } from '../utils/normalize';
-import { BLOG_TOPICS } from '../clients/blogTopic';
+import { sanitizeTopics } from '../utils/topicSanitizer';
+import { BLOG_TOPICS } from '../clients/blogTopic.client';
 
 const SERPAPI_KEY = defineSecret('SERPAPI_KEY');
 
-console.log('[r0_trends]      Flow module loaded (multi-topic support, score filter ≥100)');
+console.log('[r0_trends]      Flow module loaded (multi-topic support, sanitized output)');
+
+type Suggestion = { topic: string; score: number };
 
 export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_output>(
   {
-    name: 'r0_trends',
+    name: 'Round0_Trends',
     inputSchema: r0_trends_input,
     outputSchema: r0_trends_output,
   },
@@ -32,11 +35,11 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
 
     console.log(`[r0_trends] Processing topics: ${topics.join(', ')}`);
 
-    let allSuggestions: { topic: string; score: number }[] = [];
+    let allSuggestions: Suggestion[] = [];
     let allTimelinePoints: { time: Date; value: number }[] = [];
     const results: {
       topic: string;
-      suggestions: { topic: string; score: number }[];
+      suggestions: Suggestion[];
       trendTimeline: { time: Date; value: number }[];
     }[] = [];
 
@@ -52,19 +55,35 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
           apiKey,
         });
 
-        // 🧹 Filter per-topic suggestions under score 100
-        const filteredSuggestions = result.suggestions.filter((s: { topic: string; score: number }) => s.score >= 100);
+        // Filter per-topic suggestions under score 100
+        const filteredSuggestions = result.suggestions.filter((s: Suggestion) => s.score >= 100);
+
+        // Apply sanitization for API-safe topics
+        const sanitizedSuggestions = sanitizeTopics(
+          filteredSuggestions.map((s: Suggestion) => s.topic)
+        );
+
+        // Map back to scores
+        const finalSuggestions = sanitizedSuggestions.map((topicStr) => ({
+          topic: topicStr,
+          score:
+            filteredSuggestions.find(
+              (s: Suggestion) => s.topic.toLowerCase() === topicStr.toLowerCase()
+            )?.score ?? 0,
+        }));
 
         results.push({
           topic: t,
-          suggestions: filteredSuggestions,
+          suggestions: finalSuggestions,
           trendTimeline: result.trendTimeline,
         });
 
-        allSuggestions.push(...filteredSuggestions);
+        allSuggestions.push(...finalSuggestions);
         allTimelinePoints.push(...result.trendTimeline);
 
-        console.log(`[r0_trends] Completed: ${t}, kept ${filteredSuggestions.length}/${result.suggestions.length} suggestions`);
+        console.log(
+          `[r0_trends] Completed: ${t}, kept ${finalSuggestions.length}/${filteredSuggestions.length} suggestions`
+        );
       } catch (err) {
         console.error(`[r0_trends] Error fetching topic "${t}":`, err);
       }
@@ -85,7 +104,7 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
         topic,
         score: Math.round(v.total / v.count),
       }))
-      .filter((s: { topic: string; score: number }) => s.score >= 100) // 🧹 filter again at aggregate level
+      .filter((s: Suggestion) => s.score >= 100) // filter again at aggregate level
       .sort((a, b) => b.score - a.score);
 
     const normalizedSuggestions = normalizeTopicList(aggregatedSuggestions);
@@ -111,7 +130,7 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
       results, // per-topic results preserved
     };
 
-    console.log('[r0_trends] Aggregated output prepared with score filtering.');
+    console.log('[r0_trends] Aggregated output prepared with sanitized topics.');
     return output;
   }
 );

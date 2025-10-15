@@ -1,9 +1,17 @@
-export * from './r0_trends.schema';
-export * from './r1_ideate.schema';
-export * from './r2_outline.schema';
-export * from './r3_draft.schema';
-export * from './r4_polish.schema';
-export * from './r5_meta.schema';
-export * from './r6_coherence.schema';
-export * from './r7_publish.schema';
-export * from './orchestrator.schema';
+// --- Flows Schema ---
+export * from './flows/r0_trends.schema';
+export * from './flows/r1_ideate.schema';
+export * from './flows/r2_angle.schema';
+export * from './flows/r3_draft.schema';
+export * from './flows/r4_polish.schema';
+export * from './flows/r5_meta.schema';
+export * from './flows/r6_coherence.schema';
+export * from './flows/r7_publish.schema';
+export * from './flows/orchestrator.schema';
+
+// --- Tools Schema ---
+export * from './tools/fetchAndSummarize.schema';
+export * from './tools/googleSearch.schema';
+export * from './tools/urlContext.schema';
+
+console.log("[Schemas]        All schema modules registered")

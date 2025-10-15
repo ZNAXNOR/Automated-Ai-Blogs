@@ -1,7 +1,7 @@
 // src/prompts/r4_polish.prompt.ts
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r4_polish_output } from '../schemas/r4_polish.schema';
+import { r4_polish_output } from '../schemas/flows/r4_polish.schema';
 
 export const brandVoice = `
 You are OdTech Lab's writing engine. Write in an entertaining, slightly cringy
@@ -14,7 +14,7 @@ verification.
 `;
 
 export const polishPrompt = ai.definePrompt({
-  name: 'r4_polish_prompt',
+  name: 'Round4_PolishPrompt',
   description: 'Polishes drafted sections to match OdTech Lab’s brand voice.',
   model: 'googleai/gemini-2.0-flash',
   input: {

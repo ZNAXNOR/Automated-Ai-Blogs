@@ -1,13 +1,13 @@
-import { ai } from '../clients/genkitInstance';
-import { r4_polish_input, r4_polish_output } from '../schemas/r4_polish.schema';
-import { safeParseJsonFromAI } from '../clients/aiParsing';
+import { ai } from '../clients/genkitInstance.client';
+import { r4_polish_input, r4_polish_output } from '../schemas/flows/r4_polish.schema';
+import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 import { brandVoice } from '../prompts/r4_polish.prompt';
 
 console.log('[r4_polish]      Flow module loaded');
 
 export const r4_polish = ai.defineFlow(
   {
-    name: 'r4_polish',
+    name: 'Round4_Polish',
     inputSchema: r4_polish_input,
     outputSchema: r4_polish_output,
   },
@@ -16,7 +16,7 @@ export const r4_polish = ai.defineFlow(
       draftSections: input.draft?.length ?? 0,
     });
 
-    const promptFn = ai.prompt('r4_polish_prompt');
+    const promptFn = ai.prompt('Round4_PolishPrompt');
     let resp;
     try {
         resp = await promptFn({

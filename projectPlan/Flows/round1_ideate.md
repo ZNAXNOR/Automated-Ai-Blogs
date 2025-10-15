@@ -1,54 +1,167 @@
-# Round 1 — Topic Ideation
+# **Round 1 – Ideate Flow**
 
-## Purpose / Role  
-Transform trend signals into a small set (3–5) of candidate blog post ideas. Each idea includes a title, rationale, and a primary keyword. This is your “filtering and framing” stage before deeper content work.
+### *File: `r1_ideate.flow.ts`*
 
-## Interface  
+---
 
-| Input | Type | Description |
-|---|---|---|
-| `trendItems: TrendItem[]` | array | Signals from Round 0 |
-| → returns | `TopicIdea[]` | Candidate topic ideas, each with `title`, `rationale`, `primaryKeyword`, `seed` |
+## **Purpose**
 
-Persist to `artifacts.round1`.
+The `r1_ideate` flow evaluates the candidate topics generated in **Round 0** and selects **one winning seed idea** to move forward.
+It performs light reasoning and validation — ensuring the chosen idea aligns with trend relevance, originality, and search value.
 
-## MVP Behavior  
+This marks the transition from “topic exploration” to “focused concept selection.”
 
-- Prompt a small LLM (TinyLlama, or even a small HF model) with the trend items.  
-- Ask for 3–5 titles + rationales.  
-- Ensure titles contain at least one seed or trend keyword.  
-- Ensure rationales include a `[source?]` placeholder for citation logic.  
-- Basic dedupe: titles must differ significantly (e.g. Jaccard or embedding threshold).
+---
 
-## Refined / Advanced Goals  
+## **Interface**
 
-- Score / rank ideas by likely search traffic, competition, or trend strength.  
-- Include “intent type” metadata (e.g. tutorial, opinion, list).  
-- Provide clustering of ideas (if two are very close).  
-- Expand rationale with mini bullet points of “why now” factors.  
-- Generate alternative phrasings / synonyms for title (for A/B).  
-- Provide “title variants” (e.g. question form, list form).
+| Input        | Type                                     | Description                                |
+| ------------ | ---------------------------------------- | ------------------------------------------ |
+| `topic`      | string (optional)                        | One blog topic or theme to evaluate        |
+| `seedPrompt` | string (optional)                        | Full trend data or seed context from `r0`  |
+| → returns    | `{ title, rationale, seed, sourceUrl? }` | The single selected topic to proceed to r2 |
 
-## Common Failure Modes & Diagnostics  
+Output is persisted to **`artifacts.round1`** and **Firestore**, and directly feeds into `r2_outline`.
 
-| Symptom | Cause | Action |
-|---|---|---|
-| Titles too vague or generic | prompt poorly constrained | Add more instructions, examples, and constraints |
-| Titles that don’t correlate with seeds/trends | model drift or weak input | Enforce “must include one keyword” constraint |
-| Rationale is empty or generic | model failure or short prompt | Lower temperature, increase model capacity |
-| Duplicate or overlapping ideas | no dedupe logic | Use embedding or fuzzy dedupe across titles |
+---
 
-## Pro Practices / Enhancements  
+## **Model & Prompt Configuration**
 
-- Include negative examples (“not: clickbait, not too broad”) in prompts.  
-- Use few-shot examples (2–3 good title/rationale pairs) in the prompt to guide format.  
-- Automatically simulate click-through or query intent from titles (e.g. “Who would search this?”).  
-- Let the ideation step reject seeds that are too weak (score below threshold).  
-- Maintain a historical blacklist or archive of previously used titles to avoid duplication across runs.
+| Property          | Value                                                                   |
+| ----------------- | ----------------------------------------------------------------------- |
+| **Model**         | `googleai/gemini-2.0-flash` *(Free, ideal balance of speed & accuracy)* |
+| **Type**          | Prompt-based subflow (`ai.definePrompt`)                                |
+| **Temperature**   | `0.35` *(for stable reasoning)*                                         |
+| **Persistence**   | Firestore JSON document                                                 |
+| **Output Schema** | `r1_ideate_output` (validated with Zod)                                 |
 
-## When It Goes Wrong — Questions to Ask  
-1. Did the LLM respond with valid JSON? Did you parse it correctly?  
-2. Are the titles too general (e.g. “AI Trends”) — can you restrict or re-prompt?  
-3. Are you seeing repeated titles (embedding similarity)?  
-4. Are the rationales meaningful or boilerplate — may need stronger prompt guidance.  
-5. Do the outputs include seed keywords as expected?  
+The model analyzes all candidate topics from `r0`, ranks them internally by relevance, and returns **only the top-scoring seed** with reasoning and reference placeholders.
+
+---
+
+## **Flow Behavior**
+
+1. Receives full input from **r0** (trend arrays and candidate topics).
+2. Selects one blog topic array (based on strength, novelty, or data density).
+3. Calls `r1_ideate_prompt` with the chosen array to evaluate and rank ideas.
+4. Extracts and returns **only one final idea** (`title`, `rationale`, `seed`).
+5. Persists output to Firestore and passes the seed into `r2_outline`.
+
+---
+
+## **Flow Structure**
+
+```mermaid
+          ┌────────────────────────────────────┐
+          │       Input: r1_ideate_input       │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │   Evaluate all blog topic arrays   │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │  Apply selection logic: novelty,   │
+          │  trend strength, depth, sources    │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │    Choose one blog topic array     │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │    Evaluate and rank candidate     │
+          │   topics using Gemini 2.0 Flash    │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │      Choose top-scoring idea →     │
+          │     title, rationale, seed, url?   │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │    Save decision + metadata to     │
+          │  Firestore (with URLs, reasoning)  │
+          └───────────────────┬────────────────┘
+                              │
+                              ▼
+          ┌────────────────────────────────────┐
+          │     Output: r1_ideate_output       │
+          └────────────────────────────────────┘
+```
+
+---
+
+## **Sample Prompt (as Implemented)**
+
+```js
+SYSTEM: You are a concise content strategist. 
+You evaluate trend-based topic ideas and pick one that is timely, valuable, and clear.
+
+TASK:
+Given TREND_SIGNALS, select the single best blog topic.
+Return one title, its rationale, and seed keyword.
+
+CONSTRAINTS:
+- The title must contain a keyword from input.
+- The rationale must explain why this idea is strongest now.
+- End rationale with [source?].
+- Return only valid JSON matching schema.
+- No Markdown, no comments, no code fences.
+
+INPUT/TREND_SIGNALS: {{trendInput}}
+```
+
+---
+
+## **Refined Behavior (Next Iteration Goals)**
+
+| Goal                       | Description                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| **Array Evaluation Logic** | Build scoring logic to select one blog topic array from r0 (e.g. based on novelty, trend strength, or news recency). |
+| **Reference Retention**    | Save the selected topic’s source URLs (from r0 or News API) for future citation or contextual use in r2–r3.          |
+| **Automatic Ranking**      | Add optional scoring (0–1 scale) for transparency in selection.                                                      |
+| **Chaining Parity**        | Pass output directly into `r2_outline` as the seed input.                                                            |
+
+---
+
+## **Example Firestore Schema**
+
+**Collection:** `r1_ideate_results`
+
+```json
+{
+  "title": "AI SEO Tools Are Changing How Content Is Ranked",
+  "rationale": "This topic merges two active trend clusters (AI tools and SEO automation) with low saturation and rising interest [source?]",
+  "seed": "AI SEO tools",
+  "sourceUrl": "https://news.google.com/articles/ai-seo-2025",
+  "timestamp": "2025-10-09T21:05:00Z"
+}
+```
+
+---
+
+## **Common Failure Modes & Fixes**
+
+| Symptom                        | Cause                         | Action                                    |
+| ------------------------------ | ----------------------------- | ----------------------------------------- |
+| Output includes multiple ideas | Prompt not restrictive enough | Add rule: “Return only one idea.”         |
+| Title too generic              | Weak trend signal             | Add sample topic examples                 |
+| Rationale missing              | Model trimmed output          | Increase `maxOutputTokens` slightly       |
+| Schema parse errors            | Formatting drift              | Enforce double-quote JSON and no Markdown |
+
+---
+
+## **Pro Practices / Enhancements**
+
+* Include mini few-shot samples for quality control.
+* Keep temperature low for deterministic ranking.
+* Use similarity scoring to detect duplicate seeds across rounds.
+* Capture the model’s internal ranking explanation for future analytics.
+* Blacklist previously used titles to prevent redundancy.

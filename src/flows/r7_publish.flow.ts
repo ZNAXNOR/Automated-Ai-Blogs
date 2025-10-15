@@ -1,7 +1,7 @@
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import axios from 'axios';
 import { defineSecret } from 'firebase-functions/params';
-import { r7_publish_input, r7_publish_output } from '../schemas/r7_publish.schema';
+import { r7_publish_input, r7_publish_output } from '../schemas/flows/r7_publish.schema';
 
 const WP_API_URL = process.env.WP_API_URL || 'https://odlabagency.wpcomstaging.com/';
 const WP_USERNAME = process.env.WP_USERNAME || 'odomkardalvi';
@@ -11,7 +11,7 @@ console.log('[r7_publish]     Flow module loaded');
 
 export const r7_publish = ai.defineFlow(
   {
-    name: 'r7_publish',
+    name: 'Round7_Publish',
     inputSchema: r7_publish_input,
     outputSchema: r7_publish_output,
   },

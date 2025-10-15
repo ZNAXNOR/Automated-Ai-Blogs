@@ -1,9 +1,9 @@
-import { ai } from '../clients/genkitInstance';
+import { ai } from '../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r3_draft_output } from '../schemas/r3_draft.schema';
+import { r3_draft_output } from '../schemas/flows/r3_draft.schema';
 
 export const draftPrompt = ai.definePrompt({
-  name: 'r3_draft_prompt',
+  name: 'Round3_DraftPrompt',
   description: 'Expands a blog post outline into a full draft.',
   model: 'googleai/gemini-2.0-flash',
   input: {
