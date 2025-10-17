@@ -5,10 +5,12 @@ export const urlContextInputSchema = z.object({
 });
 
 export const urlContextOutputSchema = z.object({
-  url: z.string(),
-  title: z.string().optional(),
-  description: z.string().optional(),
-  text: z.string().optional(),
-  images: z.array(z.string()),
+  url: z.string().url(),
+  title: z.string().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  contentType: z.string().nullable().optional(), // "article", "product", etc.
+  wordCount: z.number().nullable().optional(),
+  images: z.array(z.string()).default([]),
   lang: z.string().nullable().optional(),
+  relevance: z.number().default(1),
 });

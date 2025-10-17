@@ -1,6 +1,7 @@
 import { ai } from '../clients/genkitInstance.client';
 import { r2_angle_input, r2_angle_output } from '../schemas/flows/r2_angle.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing.client';
+import { urlContextTool } from '../tools/urlContext.tool';
 
 console.log('[r2_angle]       Flow module loaded');
 
@@ -12,45 +13,115 @@ export const r2_angle = ai.defineFlow(
   },
   async (input) => {
     console.log('[r2_angle] Flow invoked with input:', input);
-    const topicIdea = input.idea ?? [];
-    console.log('[r2_angle] Using topicIdea count:', topicIdea.length);
 
-    const promptFn = ai.prompt('Round2_AnglePrompt');
+    const topicIdea = input.idea ?? [];
+    console.log('[r2_angle] Topic ideas count:', topicIdea.length);
+
+    const researchNotes: Array<{
+      url: string;
+      title?: string;
+      summary?: string;
+      contentType?: string;
+      wordCount?: number;
+    }> = [];
+
+    // 🧾 Deterministic URL fetch with up to 3 retries
+    for (const idea of topicIdea) {
+      if (!idea.references?.length) continue;
+
+      for (const ref of idea.references) {
+        const rawUrl = ref?.url;
+        if (!rawUrl || typeof rawUrl !== 'string') continue;
+
+        let attempt = 0;
+        let ctx = null;
+
+        while (attempt < 3) {
+          attempt++;
+          try {
+            console.log(`[r2_angle] Fetching context (attempt ${attempt}) for:`, rawUrl);
+
+            // ✅ Directly call tool
+            ctx = await urlContextTool({ url: rawUrl });
+
+            if (ctx?.summary && ctx.summary.trim().length > 100) {
+              break;
+            } else {
+              console.warn(`[r2_angle] Context too short on attempt ${attempt} for ${rawUrl}`);
+            }
+          } catch (err) {
+            console.warn(`[r2_angle] Attempt ${attempt} failed for ${rawUrl}:`, err);
+          }
+
+          if (attempt < 3) await new Promise((res) => setTimeout(res, 800 * attempt));
+        }
+
+        if (!ctx || !ctx.summary) {
+          console.warn('[r2_angle] Skipping due to repeated failure:', rawUrl);
+          continue;
+        }
+
+        const note = {
+          url: ctx.url ?? rawUrl,
+          title: ctx.title ?? ref.title ?? undefined,
+          summary: ctx.summary.slice(0, 500),
+          contentType: ctx.contentType ?? undefined,
+          wordCount: ctx.wordCount ?? undefined,
+        };
+
+        researchNotes.push(note);
+        console.log('[r2_angle] ✅ Added research note for:', rawUrl);
+      }
+    }
+
+    console.log(`[r2_angle] Total research notes fetched: ${researchNotes.length}`);
+    if (researchNotes.length === 0)
+      throw new Error('No valid research notes found — cannot proceed.');
+
+    // 🧠 Add grounded user context for prompt
+    const formattedResearchText = researchNotes
+      .map(
+        (r, i) =>
+          `(${i + 1}) ${r.title || 'Untitled'}\nURL: ${r.url}\nSummary: ${r.summary}\nType: ${
+            r.contentType || 'N/A'
+          }\nWords: ${r.wordCount || 'N/A'}`
+      )
+      .join('\n\n');
+
+    const userMessage = `
+These are verified factual research notes extracted directly from the URLs.
+Use them as your only factual grounding. Do not hallucinate or infer beyond them.
+
+${formattedResearchText}
+`;
+
+    const runAnglePrompt = ai.prompt('Round2_AnglePrompt');
     let resp;
     try {
-      resp = await promptFn({ topicIdea });
+      console.log('[r2_angle] Running grounded prompt...');
+      resp = await runAnglePrompt({
+        topicIdea,
+        researchNotes,
+        userInput: userMessage, // ✅ explicitly passed
+      });
     } catch (err) {
-      console.error('[r2_angle] Prompt call failed:', err);
-      throw new Error('Prompt execution error in r2_angle');
+      console.error('[r2_angle] Angle synthesis prompt failed:', err);
+      throw new Error('Angle synthesis prompt execution failed');
     }
 
     const raw = resp.text ?? (resp.output ? JSON.stringify(resp.output) : undefined);
-    if (!raw) {
-      console.error('[r2_angle] No usable output', resp);
-      throw new Error('Prompt returned no usable result');
-    }
+    if (!raw) throw new Error('Angle synthesis returned no usable result');
 
-    let outlineObj;
+    let resultObj;
     try {
-      outlineObj = safeParseJsonFromAI(raw);
+      resultObj = safeParseJsonFromAI(raw);
+      r2_angle_output.parse(resultObj);
+      console.log('[r2_angle] ✅ Output validated successfully.');
     } catch (err) {
-      console.error('[r2_angle] JSON parse failed', { raw, err });
-      throw new Error('Failed to parse prompt output');
+      console.error('[r2_angle] Schema validation failed', { raw, err });
+      throw new Error('Output did not match r2_angle schema');
     }
 
-    try {
-      r2_angle_output.parse(outlineObj);
-    } catch (err) {
-      console.error('[r2_angle] Schema validation failed', { outlineObj, err });
-      throw new Error('Prompt output did not match schema for r2_angle');
-    }
-
-    if (!outlineObj.outline.sections || outlineObj.outline.sections.length === 0) {
-      console.error('[r2_angle] No sections generated');
-      throw new Error('No sections were generated from the prompt.');
-    }
-
-    console.log('[r2_angle] ✅ Success:', outlineObj.outline.sections?.length ?? 0, 'sections generated');
-    return outlineObj;
+    return resultObj;
   }
 );
