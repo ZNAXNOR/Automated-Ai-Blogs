@@ -1,57 +1,163 @@
-# Round 3 — Section Drafting
+# 🧩 Round 3 — Draft Generation (with Context)
 
-## Purpose / Role  
-Expand each section from the outline into draft content. This is the meat of the article: you convert headings + bullets into full paragraphs with supporting statements and citation placeholders.
+### **Purpose**
 
-## Interface  
+Round 3 converts the structured outline and validated research from **Round 2** into a full, human-quality draft — while preserving factual grounding and the intended blog structure through a shared **Genkit Flow Context**.
 
-| Input | Type | Description |
-|---|---|---|
-| `outline: Outline` | object | The outline produced earlier |
-| → returns | `SectionDraft[]` | Array of drafts, each with `sectionId` and `contentHtml` and `citations` |
+---
 
-Persist to `artifacts.round3`.
+## **Contextual Design**
 
-## MVP Behavior  
+### **1️⃣ Flow Context (Guardrail Layer)**
 
-- For each `OutlineSection`, prompt LLM to produce 120–220 words of content in HTML (or markdown) form.  
-- Ensure short paragraphs, inline citation placeholders `[1]`, `[2]`, etc., where facts need support.  
-- Do not invent new facts; stick to what can be inferred or is general knowledge.  
-- Respect ordering and section IDs.
+Before any subflow begins, the entire `r2_angle` output is registered as **context**, accessible throughout the chain.
 
-## Refined / Advanced Goals  
+```ts
+ai.defineFlowContext({
+  name: 'r3_draft_context',
+  source: 'r2_angle_output',
+  description: 'Provides global outline and validated research for all draft subflows.',
+});
+```
 
-- For each section, optionally ingest “source snippets” (from cluster articles) into prompt to ground content.  
-- Use chain-of-thought instructions (e.g. “think step by step”) to help the model reason before writing.  
-- Maintain internal coherence: refer to previous section context when needed.  
-- Detect when content is too short or too verbose and trigger re-generation.  
-- Provide “gap detection” (if section is missing subtopics) and request expansion.  
-- Integrate shadow citations (e.g. “Citation A → placeholder → actual URL later”).  
-- Optionally split very large sections into sub-sections automatically.
+#### **Why This Matters**
 
-## Common Failure Modes & Diagnostics  
+* 🧭 Maintains narrative continuity between all sections
+* 🧩 Ensures subflows can reference the same research pool
+* 🧠 Prevents factual drift or duplication
+* 🔒 Enforces alignment with the validated angle from r2
 
-| Symptom | Cause | Remedy |
-|---|---|---|
-| Gibberish / nonsense text | model hallucination, prompt misformatted | Use more context, lower temperature, stronger instructions |
-| Empty or overly short content | prompt too constrained | Increase min word requirement or relax constraints |
-| Facts incorrect or invented | no grounding | Provide source snippets or require “only state well-known facts” |
-| Missing section coverage | bullet not addressed | Add bullet-check post-pass to ensure coverage |
-| Citation placeholders missing | prompt didn’t enforce | Require “provide [1], [2], etc.” in prompt explicitly |
+Each subflow and the final flow can then *read* this context automatically — similar to how professionals use a **memory or state layer** in agentic pipelines.
 
-## Pro Practices / Enhancements  
+---
 
-- Provide a “source buffer” — include 1–2 sentences from input cluster as context in prompt to reduce hallucination.  
-- Use multi-turn prompting: first “reason outline → content plan,” then expand.  
-- Use content filters / classifiers (e.g. factuality checks) and reject if quality low.  
-- Optionally parallelize drafts (parallel calls per section).  
-- After drafting, run a coherence step within the draft (embedding compare section to outline, etc.).  
-- Use a “draft confidence” score or quality metric (e.g. perplexity, classifier).
+## **Architecture**
 
-## When It Goes Wrong — Questions to Ask  
-1. Did the LLM return valid JSON / expected format?  
-2. Are paragraphs coherent or do they drift off topic?  
-3. Did every bullet get coverage or was any ignored?  
-4. Are citations present (if required)?  
-5. Did you see hallucinations (nonsense claims)? If yes, reduce temperature or add grounding.  
-6. Compare semantic similarity between section draft and outline heading — is it too low?  
+### **1️⃣ Subflow: Section Draft Generation**
+
+Each section (from the `outline.sections[]`) is handled by a dedicated subflow.
+
+Each subflow:
+
+* Receives its **heading**, **bullets**, and **estWords**.
+* Accesses the **r3_draft_context** (includes the full outline + research notes).
+* Writes a coherent section respecting its word limit and logical tone.
+
+**Subflow Output**
+
+```json
+{
+  "sectionId": "s2",
+  "heading": "RecurPost: An Overview",
+  "content": "RecurPost simplifies the way businesses handle their social media presence..."
+}
+```
+
+---
+
+### **2️⃣ Main Flow: Assembly + Reasoning**
+
+The **r3_draft flow** orchestrates all section subflows, using the `r3_draft_context` as guardrail for:
+
+* Style and tone consistency
+* Logical sequence adherence
+* Correct usage of research insights
+
+It merges all sections and adds:
+
+* Title and subtitle
+* Reading time
+* Short SEO-ready description
+* Full continuous draft
+
+---
+
+## **Tooling**
+
+### **For MVP**
+
+* ❌ No external search tools
+* ✅ AI only
+* ✅ Shared Genkit Flow Context (key new feature)
+
+Later, `googleSearchTool` and `urlContextTool` can plug into each section subflow without altering architecture — the context layer will still manage coherence.
+
+---
+
+## **Flow Data Model**
+
+### **Flow Context (`r3_draft_context`)**
+
+```ts
+{
+  "researchNotes": [
+    { "url": "...", "title": "...", "summary": "..." }
+  ],
+  "outline": {
+    "title": "...",
+    "sections": [
+      { "id": "s1", "heading": "...", "bullets": [...], "estWords": 120 }
+    ]
+  }
+}
+```
+
+### **Flow Output**
+
+```json
+{
+  "title": "Streamlining Social Media Management: A Guide to RecurPost",
+  "subtitle": "How automation transforms modern marketing",
+  "sections": [
+    { "id": "s1", "heading": "Introduction", "content": "..." },
+    { "id": "s2", "heading": "RecurPost: An Overview", "content": "..." }
+  ],
+  "description": "Discover how RecurPost simplifies social media management through automation and AI-driven scheduling.",
+  "readingTime": "6 min",
+  "fullDraft": "Managing multiple social media accounts can quickly become overwhelming..."
+}
+```
+
+---
+
+## **AI Prompting Layers**
+
+### **Subflow Prompt**
+
+> **SYSTEM:** You are a professional blog writer using structured research to create clear, engaging sections.
+>
+> **INPUT:** Section data (heading, bullets, estWords)
+> **CONTEXT:** Full outline and research notes (r3_draft_context)
+>
+> **TASK:**
+>
+> * Write a cohesive section in natural tone
+> * Use research notes if relevant
+> * Respect section focus and flow order
+>
+> **OUTPUT:** JSON containing sectionId, heading, and paragraph content.
+
+---
+
+### **Main Flow Prompt**
+
+> **SYSTEM:** You are an editor compiling all sections into a unified article.
+>
+> **CONTEXT:** Global research and outline (r3_draft_context)
+> **TASK:**
+>
+> * Merge all section drafts
+> * Ensure smooth transitions
+> * Add title, subtitle, SEO description, reading time
+> * Maintain stylistic consistency and logical flow
+
+---
+
+## **Expected Benefits**
+
+| Feature                 | Impact                              |
+| ----------------------- | ----------------------------------- |
+| Flow Context Guardrail  | Prevents factual drift              |
+| Modular Subflows        | Easier testing & debugging          |
+| Research Integration    | Natural citation and topic fidelity |
+| Extensible Architecture | Tool-ready without refactor         |

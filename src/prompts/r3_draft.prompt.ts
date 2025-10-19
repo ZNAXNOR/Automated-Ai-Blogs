@@ -4,11 +4,22 @@ import { r3_draft_output } from '../schemas/flows/r3_draft.schema';
 
 export const draftPrompt = ai.definePrompt({
   name: 'Round3_DraftPrompt',
-  description: 'Expands a blog post outline into a full draft.',
+  description: 'Compiles section drafts into a cohesive, full blog draft.',
   model: 'googleai/gemini-2.0-flash',
   input: {
     schema: z.object({
-      outline: z.any(), // accept full outline object
+      title: z.string().optional(),
+      subtitle: z.string().optional(),
+      sections: z.array(
+        z.object({
+          sectionId: z.string(),
+          heading: z.string(),
+          content: z.string(),
+        })
+      ),
+      outline: z.any().optional(), // optional for reference
+      researchNotes: z.any().optional(),
+      description: z.string().optional(),
     }),
   },
   output: {
@@ -16,30 +27,38 @@ export const draftPrompt = ai.definePrompt({
   },
   config: {
     temperature: 0.0,
-    // maxOutputTokens: 4096,
+    maxOutputTokens: 4096,
   },
   prompt: `
-SYSTEM: You are a knowledgeable, neutral blog writer expanding structured outlines into coherent drafts.
+SYSTEM: You are a professional editor compiling multiple blog sections into a cohesive article.
+
+INPUT:
+- title: {{title}}
+- subtitle: {{subtitle}}
+- sections: {{sections}}
+- outline: {{outline}}
+- researchNotes: {{researchNotes}}
 
 TASK:
-For each section in OUTLINE, write 120–220 words of polished content.
-Use factual, neutral tone with clear explanations and examples.
-Add inline citation placeholders like [1], [2] wherever external verification would be needed.
+1. Merge all sections into a single, polished blog draft.
+2. Ensure smooth transitions between sections and maintain logical flow.
+3. Keep tone professional, SEO-friendly, and factual.
+4. Generate a short SEO-ready description summarizing the article.
+5. Estimate reading time based on ~200 words per minute.
+6. Maintain each section heading in the final draft.
+7. Output JSON matching r3_draft_output schema:
+   {
+     "title": "...",
+     "subtitle": "...",
+     "sections": [ { "sectionId": "...", "heading": "...", "content": "..." } ],
+     "description": "...",
+     "readingTime": "...",
+     "fullDraft": "..."
+   }
 
-STYLE:
-- Concise, educational, active voice.
-- 1–2 short paragraphs per section.
-- Avoid fluff, repetition, or opinions.
-- Maintain section context; do not merge sections.
-
-IMPORTANT OUTPUT RULES:
-- Return ONLY a valid JSON array matching the schema below.
-- Do NOT include any Markdown, code fences (\`\`\`), or extra text.
+IMPORTANT:
+- Return ONLY valid JSON.
+- Do NOT include Markdown, code fences (\`\`\`), or extra text.
 - Strings must use double quotes only.
-- Each object must correspond to one section from OUTLINE.
-- If input is missing or unclear, return an empty valid JSON array.
-
-INPUT/OUTLINE:
-{{outline}}
   `,
 });
