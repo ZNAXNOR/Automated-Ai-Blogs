@@ -10,7 +10,6 @@ export * from './flows/r7_publish.schema';
 export * from './flows/orchestrator.schema';
 
 // --- Tools Schema ---
-export * from './tools/fetchAndSummarize.schema';
 export * from './tools/googleSearch.schema';
 export * from './tools/urlContext.schema';
 

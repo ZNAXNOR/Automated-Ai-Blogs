@@ -5,11 +5,11 @@ Take the rough drafts and polish them to your brand voice: ensure readability, c
 
 ## Interface  
 
-| Input | Type | Description |
-|---|---|---|
-| `drafts: SectionDraft[]` | array | Draft content from Round 3 |
-| `brandVoice: string` | string | Description of your voice (e.g. “practical, authoritative, friendly”) |
-| → returns | `PolishedSection[]` | Polished sections with optional readability metrics |
+| Input                    | Type                | Description                                                           |
+| ------------------------ | ------------------- | --------------------------------------------------------------------- |
+| `drafts: SectionDraft[]` | array               | Draft content from Round 3                                            |
+| `brandVoice: string`     | string              | Description of your voice (e.g. “practical, authoritative, friendly”) |
+| → returns                | `PolishedSection[]` | Polished sections with optional readability metrics                   |
 
 Persist to `artifacts.round4`.
 
@@ -30,12 +30,12 @@ Persist to `artifacts.round4`.
 
 ## Common Failure Modes & Diagnostics  
 
-| Symptom | Cause | Fix |
-|---|---|---|
-| Polished content changes facts / deletes citations | prompt too permissive | Add “do not change facts or citations” guard in prompt |
-| Output very similar to draft (no polish) | model reluctant | Increase temperature slightly or add more instructions/examples |
-| Readability score too high / low | prompt not guiding transformations | Include target readability range in prompt |
-| Inconsistent voice across sections | lack of global context | Pass brandVoice and entire draft context to prompt |
+| Symptom                                            | Cause                              | Fix                                                             |
+| -------------------------------------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| Polished content changes facts / deletes citations | prompt too permissive              | Add “do not change facts or citations” guard in prompt          |
+| Output very similar to draft (no polish)           | model reluctant                    | Increase temperature slightly or add more instructions/examples |
+| Readability score too high / low                   | prompt not guiding transformations | Include target readability range in prompt                      |
+| Inconsistent voice across sections                 | lack of global context             | Pass brandVoice and entire draft context to prompt              |
 
 ## Pro Practices / Enhancements  
 

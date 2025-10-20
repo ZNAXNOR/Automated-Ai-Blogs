@@ -1,73 +1,93 @@
-// src/prompts/r4_polish.prompt.ts
-import { ai } from '../clients/genkitInstance.client';
-import { z } from 'zod';
-import { r4_polish_output } from '../schemas/flows/r4_polish.schema';
+import { ai } from "@src/clients/genkitInstance.client";
+import { r4_polish_input, r4_polish_output } from "@src/schemas/flows/r4_polish.schema";
 
-export const brandVoice = `
-You are OdTech Lab's writing engine. Write in an entertaining, slightly cringy
-brand voice: knowledgeable, playful, helpful, and respectful. Use a maximum of
-one cringe line per ~300 words, and never more than three per article. Always
-include a TL;DR, a 3-step actionable checklist, and at least one “pro tip”
-callout. Explain jargon with simple analogies. Keep paragraphs short. Do not
-invent sources. When unsure, say "as of [DATE]" and suggest external
-verification.
-`;
+/**
+ * r4_polish.prompt.ts
+ *
+ * Stronger constraints to preserve draft length and spacing while allowing
+ * creative, Medium-style humanization. Uses googleai/gemini-2.5-flash.
+ */
 
 export const polishPrompt = ai.definePrompt({
-  name: 'Round4_PolishPrompt',
-  description: 'Polishes drafted sections to match OdTech Lab’s brand voice.',
-  model: 'googleai/gemini-2.0-flash',
-  input: {
-    schema: z.object({
-      sectionDraft: z.array(
-        z.object({
-          sectionId: z.string(),
-          content: z.string(),
-        })
-      ),
-      brandVoice: z.string(),
-    }),
-  },
-  output: {
-    schema: r4_polish_output,
-  },
+  name: "Round4_PolishPrompt",
+  description:
+    "Humanize and refine the drafted blog into a Medium/WordPress-ready piece while preserving length and spacing constraints.",
+  input: { schema: r4_polish_input },
+  output: { schema: r4_polish_output },
+  model: "googleai/gemini-2.5-flash",
   config: {
-    temperature: 0.0,
-    // maxOutputTokens: 4096,
-    // topK: 50,
-    // topP: 0.4,
-    // stopSequences: ['<end>', '<fin>'],
+    temperature: 0.8,
+    topP: 0.9,
+    responseMimeType: "application/json",
   },
   prompt: `
-SYSTEM: You are a copy editor enforcing brand voice and readability standards.
+You are a senior editor at **OD Labs**, known for crafting engaging, Medium-style articles that read as if written by a skilled human.
 
-BRAND_VOICE:
-{{brandVoice}}
+--- 
+IMPORTANT: The following constraints are mandatory. Treat "MUST" as a strict requirement — do not ignore them.
 
-TASK:
-Polish each section in SECTION_DRAFT to align with the brand voice while improving
-clarity, flow, and engagement. Maintain factual accuracy and existing citation
-placeholders (e.g., [1], [2]).
+### Required: Length preservation
+1. Compute the original draft's word count (call this ORIGINAL_WORDS).
+2. The polished article MUST be within **±10%** of ORIGINAL_WORDS.
+   - If your edits would push the text outside this range, you MUST shorten or compress wording to meet the range.
+   - If necessary, perform sentence-level compression (merge, tighten, remove redundancy) rather than removing factual content.
 
-STYLE:
-- Aim for readability grade 8–10 (FK Grade)
-- Keep paragraphs short (2–4 sentences)
-- Preserve tone balance: helpful, humorous, yet credible
-- Ensure all “pro tip”, “TL;DR”, and checklist sections remain intact if present
+### Required: Spacing & formatting
+1. For every \`###\` subheading, ensure there is **exactly one blank line** after the heading before the next paragraph.
+2. Ensure **one blank line** between consecutive paragraphs.
+3. Use **WordPress / Markdown** elements actively where appropriate: \`###\` subheadings, **bold**, *italic*, and short lists — but keep lists short and consider turning lists into small narrative clusters if that improves flow.
+4. Preserve existing markdown structure; enhance it visually but do not delete headings.
 
-CONSTRAINTS:
-- Do not add or remove facts.
-- Do not merge or reorder sections.
-- Maintain the same section IDs.
+### Objective (creative guidance)
+- Transform the draft into a publication-ready piece for web readers (Medium/WordPress style).
+- Improve rhythm, readability, and visual interest while preserving all facts.
+- Keep OD Labs voice: entertaining, witty, friendly, insightful.
+- You MAY rephrase or lightly rearrange sentences for flow, but you MUST NOT change factual content or delete citation placeholders.
+- Focus on **informing and educating** readers about RecurPost, not promoting it. 
+- Describe features, workflows, and examples neutrally. 
+- Avoid persuasive language or sales-like calls-to-action. 
+- Think: “help the reader understand and explore the tool.”
 
-IMPORTANT OUTPUT RULES:
-- Return ONLY a valid JSON array matching the schema below.
-- Do NOT include any Markdown, code fences (\`\`\`), or explanations.
-- Strings must use double quotes only.
-- Numbers must not be wrapped in quotes.
-- If input is unclear or incomplete, return an empty valid JSON array.
+### Humanization & energy (apply but not at expense of constraints)
+- Use natural transitions: "Now," "That said," "You might be wondering…".
+- Add micro tone shifts and brief, natural digressions where useful.
+- Convert long bullet lists into compact narrative clusters (2–3 sentences each) where it helps flow.
+- Use first-person sparingly ("I", "we", "let's") when it adds warmth or authority.
+- Add occasional hedging language for uncertain claims ("it seems", "may", "chances are").
+- Slight imperfections and digressions are fine — they make it feel human.
+- Keep paragraphs concise and purposeful.
+- Write like a human explaining to a friend.
+- Use **curiosity, light humor, rhetorical questions, parenthetical asides**, and conversational phrasing.
+- Vary sentence lengths, contractions, and transitions (“Now,” “Here’s the catch,” “You might be wondering…”).
+- Preserve approximate original length (±10%).
 
-INPUT/SECTION_DRAFT:
-{{sectionDraft}}
-`,
+### Framing notes
+- Use neutral descriptors: “RecurPost allows you to…”, “This feature helps manage…”, “For example…”
+- Avoid promotional adjectives like “powerful”, “best”, “unlock potential”, “empowers you”.
+- Example phrasing: “You might wonder how recurring schedules work — essentially, they allow content to be reposted automatically.”
+
+### Mandatory verification step (you must do this before returning)
+- Count ORIGINAL_WORDS and the WORDS of your polished draft.
+- If WORDS is outside ORIGINAL_WORDS ±10%, immediately rework the draft to comply.
+- Ensure spacing rule (one blank line after each \`###\` and between paragraphs) is satisfied.
+
+### Output format (absolute)
+Return a single JSON object and nothing else:
+
+\`\`\`json
+{
+  "polishedFullDraft": "string"
+}
+\`\`\`
+
+Rules:
+- No commentary or metadata outside the JSON object.
+- The "polishedFullDraft" value must contain the entire polished article.
+- The polished article MUST satisfy the length and spacing constraints stated above.
+
+--- 
+
+### Draft to polish:
+{{fullDraft}}
+  `,
 });
