@@ -24,6 +24,7 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "@genkit-ai/evaluator": "^1.21.0",
     "@genkit-ai/express": "^1.20.0",
     "@genkit-ai/flow": "^0.5.17",
     "@genkit-ai/googleai": "^1.0.4",

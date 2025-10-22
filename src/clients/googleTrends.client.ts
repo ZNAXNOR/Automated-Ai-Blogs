@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { normalizeTopicList } from '../utils/normalize';
+import { normalizeTopicList } from '../utils/normalize.util';
 
 interface GoogleTrendsParams {
   topic: string;

@@ -2,8 +2,8 @@ import { ai } from '../clients/genkitInstance.client';
 import { defineSecret } from 'firebase-functions/params';
 import { r0_trends_input, r0_trends_output } from '../schemas/flows/r0_trends.schema';
 import { fetchGoogleTrends } from '../clients/googleTrends.client';
-import { normalizeTopicList } from '../utils/normalize';
-import { sanitizeTopics } from '../utils/topicSanitizer';
+import { normalizeTopicList } from '../utils/normalize.util';
+import { sanitizeTopics } from '../utils/topicSanitizer.util';
 import { BLOG_TOPICS } from '../clients/blogTopic.client';
 
 const SERPAPI_KEY = defineSecret('SERPAPI_KEY');

@@ -3,4 +3,4 @@ import { urlContextTool } from "./urlContext.tool";
 
 export { googleSearchTool, urlContextTool };
 
-console.log('[Tools]          All tool   modules registered');
+console.log('[Tools]          All tool      modules registered');

@@ -19,3 +19,5 @@ export const flows = [
   r6_coherence,
   r7_publish,
 ];
+
+console.log('[Flows]          All flow      modules registered');

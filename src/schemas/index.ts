@@ -13,4 +13,11 @@ export * from './flows/orchestrator.schema';
 export * from './tools/googleSearch.schema';
 export * from './tools/urlContext.schema';
 
-console.log("[Schemas]        All schema modules registered")
+// --- Evaluators Schema ---
+export * from './evaluators/evaluateAll.schema';
+export * from './evaluators/humanization.schema';
+export * from './evaluators/metadata.schema';
+export * from './evaluators/readability.schema';
+
+
+console.log("[Schemas]        All schema    modules registered")

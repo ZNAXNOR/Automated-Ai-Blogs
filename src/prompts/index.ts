@@ -22,4 +22,4 @@ export { coherencePrompt } from './r6_coherence.prompt';
 
 export { urlContextPrompt } from './tools/urlContext.prompt';
 
-console.log('[DotPrompt]      All prompt modules registered');
+console.log('[DotPrompt]      All prompt    modules registered');
