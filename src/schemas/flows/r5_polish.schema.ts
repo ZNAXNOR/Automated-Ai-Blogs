@@ -1,15 +1,5 @@
 import { z } from "zod";
-
-/**
- * Image guidance schema (from r4_meta_output)
- */
-export const ImagePromptSchema = z.object({
-  type: z.enum(["ai_prompt", "stock_reference", "meme"]),
-  description: z.string(),
-  aiPrompt: z.string().optional(),
-  styleGuidance: z.string().optional(),
-  context: z.string().optional(),
-});
+import { ImagePromptSchema } from "./r4_meta.schema";
 
 /**
  * Metadata schema from r4

@@ -6,7 +6,7 @@ import './flows/r3_draft.prompt';
 import './flows/r3_draft_section.prompt';
 import './flows/r4_meta.prompt';
 import './flows/r5_polish.prompt';
-import './flows/r6_coherence.prompt';
+import './flows/r6_social.prompt';
 
 import './tools/urlContext.prompt'
 
@@ -18,7 +18,7 @@ export { draftSectionPrompt } from './flows/r3_draft_section.prompt';
 export { draftPrompt } from './flows/r3_draft.prompt';
 export { polishPrompt } from './flows/r5_polish.prompt';
 export { metaPrompt } from './flows/r4_meta.prompt';
-export { coherencePrompt } from './flows/r6_coherence.prompt';
+// export { socialPrompt } from './flows/r6_social.prompt';
 
 export { urlContextPrompt } from './tools/urlContext.prompt';
 

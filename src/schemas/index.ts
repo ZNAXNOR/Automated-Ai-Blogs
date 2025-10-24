@@ -5,8 +5,10 @@ export * from './flows/r2_angle.schema';
 export * from './flows/r3_draft.schema';
 export * from './flows/r4_meta.schema';
 export * from './flows/r5_polish.schema';
-export * from './flows/r6_coherence.schema';
-export * from './flows/r7_publish.schema';
+// export * from './flows/r6_social';
+// export * from './flows/r7_evaluation.schema';
+// export * from './flows/r8_publish.schema';
+
 export * from './flows/orchestrator.schema';
 
 // --- Tools Schema ---
