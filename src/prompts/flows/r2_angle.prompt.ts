@@ -1,6 +1,6 @@
-import { ai } from '../clients/genkitInstance.client';
+import { ai } from '../../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r2_angle_output } from '../schemas/flows/r2_angle.schema';
+import { r2_angle_output } from '../../schemas/flows/r2_angle.schema';
 
 /**
  * Round2_AnglePrompt

@@ -6,8 +6,8 @@ import {
   R3SectionOutput,
   R3DraftOutput,
 } from '../schemas/flows/r3_draft.schema';
-import { draftSectionPrompt } from '../prompts/r3_draft_section.prompt';
-import { draftPrompt } from '../prompts/r3_draft.prompt';
+import { draftPrompt } from '../prompts/flows/r3_draft.prompt';
+import { draftSectionPrompt } from '../prompts/flows/r3_draft_section.prompt';
 import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 
 console.log(`[r3_draft]       Flow module loaded`);

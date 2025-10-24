@@ -1,6 +1,6 @@
-import { ai } from '../clients/genkitInstance.client';
+import { ai } from '../../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r3_section_output } from '../schemas/flows/r3_draft.schema';
+import { r3_section_output } from '../../schemas/flows/r3_draft.schema';
 
 export const draftSectionPrompt = ai.definePrompt({
   name: 'Round3_SectionDraftPrompt',

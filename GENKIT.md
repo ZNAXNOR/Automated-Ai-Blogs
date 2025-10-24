@@ -394,49 +394,46 @@ exhaustive list.
 
 ### Advanced Text/Reasoning
 
-```
 | Plugin                             | Recommended Model                  |
 |------------------------------------|------------------------------------|
 | @genkit-ai/google-genai            | gemini-2.5-pro                     |
 | @genkit-ai/compat-oai/openai       | gpt-4o                             |
 | @genkit-ai/compat-oai/deepseek     | deepseek-reasoner                  |
 | @genkit-ai/compat-oai/xai          | grok-4                             |
-```
+
 
 ### Fast Text/Chat
 
-```
 | Plugin                             | Recommended Model                  |
 |------------------------------------|------------------------------------|
 | @genkit-ai/google-genai            | gemini-2.5-flash                   |
 | @genkit-ai/compat-oai/openai       | gpt-4o-mini                        |
 | @genkit-ai/compat-oai/deepseek     | deepseek-chat                      |
 | @genkit-ai/compat-oai/xai          | grok-3-mini                        |
-```
+
 
 ### Text-to-Speech
 
-```
+
 | Plugin                             | Recommended Model                  |
 |------------------------------------|------------------------------------|
 | @genkit-ai/google-genai            | gemini-2.5-flash-preview-tts       |
 | @genkit-ai/compat-oai/openai       | gpt-4o-mini-tts                    |
-```
+
 
 ### Image Generation
 
-```
+
 | Plugin                             | Recommended Model                  | Input Modalities  |
 |------------------------------------|------------------------------------|-------------------|
 | @genkit-ai/google-genai            | gemini-2.5-flash-image-preview     | Text, Image       |
 | @genkit-ai/google-genai            | imagen-4.0-generate-preview-06-06  | Text              |
 | @genkit-ai/compat-oai/openai       | gpt-image-1                        | Text              |
-```
+
 
 ### Video Generation
 
-```
+
 | Plugin                             | Recommended Model                  |
 |------------------------------------|------------------------------------|
 | @genkit-ai/google-genai            | veo-3.0-generate-preview           |
-```

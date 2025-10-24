@@ -1,7 +1,7 @@
 // src/prompts/r6_coherence.prompt.ts
-import { ai } from '../clients/genkitInstance.client';
+import { ai } from '../../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r6_coherence_output } from '../schemas/flows/r6_coherence.schema';
+import { r6_coherence_output } from '../../schemas/flows/r6_coherence.schema';
 
 export const coherencePrompt = ai.definePrompt({
   name: 'Round6_CoherencePrompt',

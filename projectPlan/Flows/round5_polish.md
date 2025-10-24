@@ -1,4 +1,5 @@
-# Round 4 — Tone Polishing
+
+.# Round 5 — Tone Polishing
 
 ## Purpose / Role  
 Take the rough drafts and polish them to your brand voice: ensure readability, consistency, stylistic tone, grammar, flow, while preserving factual statements and citation placeholders.
@@ -7,11 +8,11 @@ Take the rough drafts and polish them to your brand voice: ensure readability, c
 
 | Input                    | Type                | Description                                                           |
 | ------------------------ | ------------------- | --------------------------------------------------------------------- |
-| `drafts: SectionDraft[]` | array               | Draft content from Round 3                                            |
+| `drafts: SectionDraft[]` | array               | Draft content from Round 4 (meta)                                     |
 | `brandVoice: string`     | string              | Description of your voice (e.g. “practical, authoritative, friendly”) |
 | → returns                | `PolishedSection[]` | Polished sections with optional readability metrics                   |
 
-Persist to `artifacts.round4`.
+Persist to `artifacts.round5`.
 
 ## MVP Behavior  
 
