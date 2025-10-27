@@ -7,7 +7,7 @@ import {r4_meta} from './r4_meta.flow'
 import {r5_polish} from './r5_polish.flow'
 // import {r6_social} from './r6_social.flow'
 // import {r7_evaluation} from './r7_evaluation.flow'
-// import { r8_publish } from './r8_publish.flow'
+import { r8_publish } from './r8_publish.flow'
 
 export const flows = [
   // orchestrator,
@@ -19,7 +19,7 @@ export const flows = [
   r5_polish,
   // r6_social,
   // r7_evalustion,
-  // r8_publish
+  r8_publish
 ];
 
 console.log('[Flows]          All flow      modules registered');

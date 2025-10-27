@@ -48,4 +48,15 @@ export const r5_polish_output = z.object({
   readability: z.object({
     fkGrade: z.number().optional(),
   }),
+  usedImages: z
+    .array(
+      z.object({
+        type: z.enum(["ai_prompt", "meme", "stock_reference"]),
+        description: z.string(),
+        aiPrompt: z.string().optional(),
+        context: z.string().optional(),
+        alt: z.string(),
+      })
+    )
+    .optional(),
 });

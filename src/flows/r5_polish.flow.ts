@@ -4,7 +4,7 @@ import { r5_polish_input, r5_polish_output } from "@src/schemas/flows/r5_polish.
 import { safeParseJsonFromAI } from "@src/clients/aiParsing.client";
 import { z } from "zod";
 
-console.log("[r5_polish] Flow module loaded");
+console.log("[r5_polish]      Flow module loaded");
 
 export const r5_polish = ai.defineFlow(
   {
@@ -52,6 +52,10 @@ export const r5_polish = ai.defineFlow(
       } catch (err) {
         console.error(`[r5_polish] Error parsing AI response (attempt ${attempt}):`, err);
       }
+    }
+
+    if (parsed && (!parsed.usedImages || parsed.usedImages.length === 0)) {
+        console.warn("[r5_polish] No images were used in output");
     }
 
     // Fallback in case parsing fails
