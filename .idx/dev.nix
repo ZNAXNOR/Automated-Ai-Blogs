@@ -7,18 +7,53 @@
   packages = [
     pkgs.nodejs_20
     pkgs.util-linux
+    pkgs.openjdk21
     # pkgs.go
   ];
+
   # Sets environment variables in the workspace
   env = {
-    #TODO Get a API key from https://g.co/ai/idxGetGeminiKey 
-    GOOGLE_GENAI_API_KEY = ""; 
+    # --- AI / Genkit keys ---
+    GOOGLE_GENAI_API_KEY = " "; # Get from https://g.co/ai/idxGetGeminiKey
+    
+    # --- Data Collection ---
+    SERPAPI_KEY = " "; # Optional if you’re using SERP-based r0 flow
+
+    # --- Huggingface Api ---
+    HF_TOKEN = " "; # Optional if you’re using HuggingFace models
+    
+    # --- Apyhub Api ---
+    APYHUB_API_KEY = " ";
+
+    # --- News API Keys ---
+    NEWSDATA_API = " ";
+    GNEWS_API = " ";
+
+    # --- Google Custom Search Engine Api ---
+    GOOGLE_CSE_API_KEY = " ";
+    GOOGLE_CSE_CX = " ";
+
+    # --- WordPress blog publishing (r5) ---
+    WP_API_URL = " ";
+    WP_USERNAME = " ";
+    WP_PASSWORD = " ";
+    
+    # --- GCP metadata ---
+    GCP_PROJECT_ID = " ";
+    GCS_BUCKET_NAME = " ";
+
+    # --- Firebase / Firestore setup ---
+    GCP_SERVICE_ACCOUNT_JSON = " ";
   };
+  
   idx = {
     # Search for the extensions you want on https://open-vsx.org/ and use "publisher.id"
     extensions = [
       # "vscodevim.vim"
       # "golang.go"
+      "esbenp.prettier-vscode"
+      "PKief.material-icon-theme"
+      "yzhang.markdown-all-in-one"
     ];
 
     # Workspace lifecycle hooks
