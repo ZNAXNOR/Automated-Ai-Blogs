@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { normalizeTopicList } from '../utils/normalize.util';
+import { normalizeTopicList } from '../../utils/normalize.util';
 
 interface GoogleTrendsParams {
   topic: string;
@@ -56,7 +56,7 @@ export async function fetchGoogleTrends(params: GoogleTrendsParams) {
   // 1️⃣ Cache check
   const cached = cache[cacheKey];
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    console.log(`[gtrendsClient] Using cached data for ${cacheKey}`);
+    console.log(`[googleTrendsClient] Using cached data for ${cacheKey}`);
     return cached.data;
   }
 
@@ -75,7 +75,6 @@ export async function fetchGoogleTrends(params: GoogleTrendsParams) {
   try {
     console.log(`[googleTrendsClient] Fetching from SerpAPI with params:`, apiParams);
     const resp = await axios.get('https://serpapi.com/search.json', { params: apiParams });
-    console.log(`[googleTrendsClient] SerpAPI response for topic "${topic}":`, resp.data);
     const result = processSerpApiResponse(resp.data || {});
 
     cache[cacheKey] = { data: result, fetchedAt: Date.now() };
@@ -88,15 +87,12 @@ export async function fetchGoogleTrends(params: GoogleTrendsParams) {
     apiParams.data_type = 'RELATED_QUERIES';
     apiParams.date = 'today 12-m';
 
-    try {
-        console.log(`[googleTrendsClient] Fetching from SerpAPI with fallback params:`, apiParams);
-        const resp = await axios.get('https://serpapi.com/search.json', { params: apiParams });
-        // console.log(`[googleTrendsClient] SerpAPI fallback response for topic "${topic}":`, resp.data);
+    try {        
+        const resp = await axios.get('https://serpapi.com/search.json', { params: apiParams });        
         const fallbackResult = processSerpApiResponse(resp.data || {});
         console.log('[googleTrendsClient] Fallback request succeeded.');
         return fallbackResult;
-    } catch (fallbackErr: any) {
-        console.error('[googleTrendsClient] Fallback SerpAPI request failed:', fallbackErr?.message || fallbackErr);
+    } catch (fallbackErr: any) {        
         if (cache[cacheKey]) {
           console.warn('[googleTrendsClient] Returning stale cached data.');
           return cache[cacheKey].data;

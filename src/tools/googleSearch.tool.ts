@@ -1,4 +1,4 @@
-import { search } from "../clients/gSearch.client";
+import { search } from "../clients/google/googleSearch.client";
 import { ai } from "../clients/genkitInstance.client";
 import { googleSearchInputSchema, googleSearchOutputSchema } from "../schemas/tools/googleSearch.schema";
 

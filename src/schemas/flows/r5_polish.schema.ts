@@ -1,20 +1,5 @@
 import { z } from "zod";
-import { ImagePromptSchema } from "./r4_meta.schema";
-
-/**
- * Metadata schema from r4
- */
-export const R4MetaSchema = z.object({
-  title: z.string(),
-  slug: z.string(),
-  seoDescription: z.string(),
-  seoKeywords: z.array(z.string()),
-  tags: z.array(z.string()),
-  primaryCategory: z.string(),
-  readingLevel: z.enum(["Beginner", "Intermediate", "Expert"]),
-  featuredImage: ImagePromptSchema,
-  additionalImages: z.array(ImagePromptSchema).optional(),
-});
+import { r4_meta_output } from "./r4_meta.schema";
 
 /**
  * Input schema for r5_polish
@@ -34,7 +19,7 @@ export const r5_polish_input = z.object({
     .array()
     .optional(),
   fullDraft: z.string().optional(), // Alternative to sections
-  meta: R4MetaSchema,
+  meta: r4_meta_output,
   tone: z.string().optional(), // Optional tone preference
 });
 

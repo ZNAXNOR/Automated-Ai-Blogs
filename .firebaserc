@@ -1,5 +1,6 @@
 {
   "projects": {
     "default": "blogwebsite-2004"
-  }
+  },
+  "runtime": "nodejs20"
 }
