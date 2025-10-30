@@ -1,10 +1,15 @@
 import { ai } from '../clients/genkitInstance.client';
 import { defineSecret } from 'firebase-functions/params';
 import { r0_trends_input, r0_trends_output } from '../schemas/flows/r0_trends.schema';
-import { fetchGoogleTrends } from '../clients/googleTrends.client';
+import { fetchGoogleTrends } from '../clients/google/googleTrends.client';
 import { normalizeTopicList } from '../utils/normalize.util';
 import { sanitizeTopics } from '../utils/topicSanitizer.util';
 import { BLOG_TOPICS } from '../clients/blogTopic.client';
+
+import { v4 as uuidv4 } from 'uuid';
+
+// --- Storage adapter import (r0 storage) ---
+import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 
 const SERPAPI_KEY = defineSecret('SERPAPI_KEY');
 
@@ -32,8 +37,6 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
       : input.topic
       ? [input.topic]
       : BLOG_TOPICS;
-
-    console.log(`[r0_trends] Processing topics: ${topics.join(', ')}`);
 
     let allSuggestions: Suggestion[] = [];
     let allTimelinePoints: { time: Date; value: number }[] = [];
@@ -80,10 +83,6 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
 
         allSuggestions.push(...finalSuggestions);
         allTimelinePoints.push(...result.trendTimeline);
-
-        console.log(
-          `[r0_trends] Completed: ${t}, kept ${finalSuggestions.length}/${filteredSuggestions.length} suggestions`
-        );
       } catch (err) {
         console.error(`[r0_trends] Error fetching topic "${t}":`, err);
       }
@@ -122,7 +121,7 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
       value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
     }));
 
-    // --- Final output ---
+    // --- Final output (unchanged) ---
     const output = {
       aggregatedTopics: topics,
       suggestions: normalizedSuggestions,
@@ -131,6 +130,52 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
     };
 
     console.log('[r0_trends] Aggregated output prepared with sanitized topics.');
-    return output;
+
+    const pipelineId = (input as any).pipelineId ?? uuidv4();
+    let storageResult: any;
+
+    try {
+      storageResult = await ai.run('Round0_Storage', async () => {
+        const args = { pipelineId, round: 'r0', data: output, inputMeta: input };
+        const { pipelineId: pId, round = 'r0', data } = args;
+
+        const startedAt = new Date().toISOString();
+        try {
+          const persistResult = await persistRoundOutput(pId, round, data);
+          return {
+            ok: true,
+            pipelineId: pId,
+            round,
+            persistResult,
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          };
+        } catch (err) {
+          console.error(`[r0_trends:Round0_Storage] persistRoundOutput failed:`, err);
+          return {
+            ok: false,
+            pipelineId: pId,
+            round,
+            error: String(err),
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          };
+        }
+      });
+      console.log('[r0_trends] Round0_Storage span result:', storageResult);
+    } catch (err) {
+      console.error('[r0_trends] Round0_Storage span unexpected error:', err);
+      storageResult = { ok: false, error: String(err) };
+    }
+
+    // Return the original output but include storage metadata for observability.
+    // Existing consumers that expect the original shape will still receive it unchanged.
+    return {
+      ...output,
+      // add pipelineId so downstream flows can reference it
+      pipelineId,
+      // storage metadata in a clearly namespaced field to avoid collisions
+      __storage: storageResult,
+    };
   }
 );

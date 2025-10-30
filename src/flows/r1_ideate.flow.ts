@@ -2,7 +2,7 @@ import { ai } from '../clients/genkitInstance.client';
 import { r1_ideate_input, r1_ideate_output } from '../schemas/flows/r1_ideate.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 import admin from 'firebase-admin';
-import { fetchNewsForTopics } from '../clients/googleNews.client';
+import { fetchNewsForTopics } from '../clients/google/googleNews.client';
 import { googleSearchTool } from '../tools/googleSearch.tool'; // conditional tool
 
 console.log('[r1_ideate]      Flow module loaded');
