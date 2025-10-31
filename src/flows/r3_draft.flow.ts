@@ -9,6 +9,7 @@ import {
 import { draftPrompt } from '../prompts/flows/r3_draft.prompt';
 import { draftSectionPrompt } from '../prompts/flows/r3_draft_section.prompt';
 import { safeParseJsonFromAI } from '../clients/aiParsing.client';
+import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 
 console.log(`[r3_draft]       Flow module loaded`);
 
@@ -23,14 +24,10 @@ export const r3_draft = ai.defineFlow(
       flow: 'r3_draft',
       stage: 'start',
       message: 'Flow invoked',
-      input,
+      pipelineId: input.pipelineId,
     });
-    // context may include things like { angle, researchNotes, outline } if upstream passes them.
 
-    const outline = input.outline ?? { title: null, sections: [] };
-    const researchNotes = input.researchNotes ?? [];
-    const subtitle = typeof input.subtitle === 'string' ? input.subtitle : undefined;
-    const description = typeof input.description === 'string' ? input.description : undefined;
+    const { pipelineId, outline, researchNotes } = input;
 
     if (!Array.isArray(outline.sections) || outline.sections.length === 0) {
       console.warn({
@@ -40,8 +37,9 @@ export const r3_draft = ai.defineFlow(
         outline,
       });
       return {
+        pipelineId,
         title: outline.title ?? 'Untitled Article',
-        subtitle,
+        subtitle: null,
         sections: [],
         description: '',
         readingTime: '1 min',
@@ -59,12 +57,14 @@ export const r3_draft = ai.defineFlow(
     });
 
     for (const sec of outline.sections) {
-      const sectionInput: R3SectionInput = {
-        sectionId: sec.id,
-        heading: sec.heading,
-        bullets: sec.bullets ?? [],
-        estWords: sec.estWords ?? 200,
-      };
+        const sectionInput: R3SectionInput = {
+            title: outline.title,
+            researchNotes,
+            sectionId: sec.id,
+            heading: sec.heading,
+            bullets: sec.bullets ?? [],
+            estWords: sec.estWords ?? 200,
+        };
 
       try {
         console.log({
@@ -72,25 +72,11 @@ export const r3_draft = ai.defineFlow(
           stage: 'section_prompt',
           message: `Running section prompt for ${sec.id} - "${sec.heading}"`,
           sectionId: sec.id,
-          heading: sec.heading,
         });
 
-        const sectionResp = await draftSectionPrompt(sectionInput, {
-          context: {
-            ...context,
-            outline,
-            researchNotes,
-          },
-        });
+        const sectionResp = await draftSectionPrompt(sectionInput);
 
         const raw = sectionResp.text ?? JSON.stringify(sectionResp.output ?? {});
-        console.log({
-            flow: 'r3_draft',
-            stage: 'section_prompt_response',
-            message: `Raw response for section ${sec.id}`,
-            sectionId: sec.id,
-            raw,
-        });
         const parsed = safeParseJsonFromAI(raw);
 
         sectionOutputs.push(parsed);
@@ -125,11 +111,9 @@ export const r3_draft = ai.defineFlow(
 
     const mainPromptInput = {
       title: outline.title ?? 'Untitled Article',
-      subtitle,
       sections: sectionOutputs,
       outline,
       researchNotes,
-      description,
     };
 
     let finalDraft: R3DraftOutput;
@@ -139,30 +123,12 @@ export const r3_draft = ai.defineFlow(
           stage: 'main_prompt',
           message: 'Running main draft prompt to merge sections...',
       });
-      console.log({
-          flow: 'r3_draft',
-          stage: 'main_prompt_input',
-          message: 'Input for main draft prompt',
-          mainPromptInput,
-      });
 
-      const resp = await draftPrompt(mainPromptInput, {
-        context: {
-          ...context,
-          outline,
-          researchNotes,
-        },
-      });
+      const resp = await draftPrompt(mainPromptInput);
 
       const raw = resp.text ?? JSON.stringify(resp.output ?? {});
-      console.log({
-        flow: 'r3_draft',
-        stage: 'main_prompt_response',
-        message: 'Raw response from main draft prompt',
-        raw,
-      });
-
       finalDraft = safeParseJsonFromAI(raw);
+      finalDraft.pipelineId = pipelineId;
 
       r3_draft_output.parse(finalDraft);
       console.log({
@@ -180,10 +146,11 @@ export const r3_draft = ai.defineFlow(
       const fullDraft = sectionOutputs.map((s) => `## ${s.heading}\n\n${s.content}`).join('\n\n');
       const wordCount = sectionOutputs.reduce((acc, s) => acc + s.content.split(/\s+/).length, 0);
       finalDraft = {
+        pipelineId,
         title: outline.title ?? 'Untitled Article',
-        subtitle,
+        subtitle: null,
         sections: sectionOutputs,
-        description: description ??
+        description:
           (sectionOutputs[0]?.content.split(' ').slice(0, 30).join(' ') + '...'),
         readingTime: `${Math.max(1, Math.round(wordCount / 200))} min`,
         fullDraft,
@@ -195,12 +162,47 @@ export const r3_draft = ai.defineFlow(
       });
     }
 
+    const storageResult = await ai.run('Round3_Storage', async () => {
+        const args = { pipelineId, round: 'r3', data: finalDraft, inputMeta: input };
+        const { pipelineId: pId, round, data } = args;
+        const startedAt = new Date().toISOString();
+
+        try {
+            const persistResult = await persistRoundOutput(pId, round, data);
+            return {
+                ok: true,
+                pipelineId: pId,
+                round,
+                persistResult,
+                startedAt,
+                finishedAt: new Date().toISOString(),
+            };
+        } catch (err) {
+            console.error(`[r3_draft:Round3_Storage] persistRoundOutput failed:`, err);
+            return {
+                ok: false,
+                pipelineId: pId,
+                round,
+                error: String(err),
+                startedAt,
+                finishedAt: new Date().toISOString(),
+            };
+        }
+    });
+
+    const finalOutput = {
+        ...finalDraft,
+        __storage: storageResult,
+    };
+
     console.log({
         flow: 'r3_draft',
         stage: 'complete',
-        message: 'Flow completed',
-        finalDraft,
+        message: '✅ Flow completed successfully',
+        pipelineId,
+        gcsPath: storageResult?.persistResult?.gcsPath,
     });
-    return finalDraft;
+
+    return finalOutput;
   }
 );

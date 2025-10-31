@@ -15,15 +15,13 @@ export const r2_angle = ai.defineFlow(
   async (input) => {
     console.log('[r2_angle] Flow invoked with input:', input);
 
-    // --- Use pipelineId for continuity (from r1) ---
     const { pipelineId } = input;
     if (!pipelineId) {
       throw new Error(
-        'Missing pipelineId in flow input. r2 storage requires a persistent pipelineId to update Firestore and GCS.'
+        'Missing pipelineId in flow input. r2 storage requires a persistent pipelineId.'
       );
     }
 
-    // --- The input is now a single idea object, wrap in an array for consistent processing
     const topicIdea = [input];
     console.log('[r2_angle] Processing 1 idea for pipelineId:', pipelineId);
 
@@ -35,7 +33,6 @@ export const r2_angle = ai.defineFlow(
       wordCount?: number;
     }> = [];
 
-    // 🧾 Deterministic URL fetch with up to 3 retries
     for (const idea of topicIdea) {
       if (!idea.references?.length) continue;
 
@@ -50,19 +47,14 @@ export const r2_angle = ai.defineFlow(
           attempt++;
           try {
             console.log(`[r2_angle] Fetching context (attempt ${attempt}) for:`, rawUrl);
-
-            // ✅ Directly call tool
             ctx = await urlContextTool({ url: rawUrl });
-
             if (ctx?.summary && ctx.summary.trim().length > 100) {
               break;
-            } else {
-              console.warn(`[r2_angle] Context too short on attempt ${attempt} for ${rawUrl}`);
             }
+            console.warn(`[r2_angle] Context too short on attempt ${attempt} for ${rawUrl}`);
           } catch (err) {
             console.warn(`[r2_angle] Attempt ${attempt} failed for ${rawUrl}:`, err);
           }
-
           if (attempt < 3) await new Promise((res) => setTimeout(res, 800 * attempt));
         }
 
@@ -85,30 +77,6 @@ export const r2_angle = ai.defineFlow(
     }
 
     console.log(`[r2_angle] Total research notes fetched: ${researchNotes.length}`);
-    if (researchNotes.length === 0)
-      console.warn('No valid research notes found — proceeding without them.');
-
-
-    // 🧠 Add grounded user context for prompt
-    const formattedResearchText = researchNotes
-      .map(
-        (r, i) =>
-          `(${i + 1}) ${r.title || 'Untitled'}
-            URL: ${r.url}
-            Summary: ${r.summary}
-            Type: ${
-            r.contentType || 'N/A'
-          }
-          Words: ${r.wordCount || 'N/A'}`
-      )
-      .join('');
-
-    const userMessage = `
-      These are verified factual research notes extracted directly from the URLs.
-      Use them as your only factual grounding. Do not hallucinate or infer beyond them.
-
-      ${formattedResearchText}
-    `;
 
     const runAnglePrompt = ai.prompt('Round2_AnglePrompt');
     let resp;
@@ -117,7 +85,6 @@ export const r2_angle = ai.defineFlow(
       resp = await runAnglePrompt({
         topicIdea,
         researchNotes,
-        userInput: userMessage, // ✅ explicitly passed
       });
     } catch (err) {
       console.error('[r2_angle] Angle synthesis prompt failed:', err);
@@ -130,9 +97,10 @@ export const r2_angle = ai.defineFlow(
     let resultObj: any;
     try {
       resultObj = safeParseJsonFromAI(raw);
-      // Add pipelineId to the object before validation
+      // Add pipelineId and researchNotes to the object before validation
       resultObj.pipelineId = pipelineId;
-      // Validate against the declared output schema
+      resultObj.researchNotes = researchNotes;
+
       r2_angle_output.parse(resultObj);
       console.log('[r2_angle] ✅ Output validated successfully.');
     } catch (err) {
@@ -140,10 +108,9 @@ export const r2_angle = ai.defineFlow(
       throw new Error('Output did not match r2_angle schema');
     }
 
-    // 7️⃣ Inline subflow — Round2_Storage
     const storageResult = await ai.run('Round2_Storage', async () => {
       const args = { pipelineId: pipelineId, round: 'r2', data: resultObj, inputMeta: input };
-      const { pipelineId: pId, round = 'r2', data } = args;
+      const { pipelineId: pId, round, data } = args;
       const startedAt = new Date().toISOString();
 
       try {
@@ -169,7 +136,6 @@ export const r2_angle = ai.defineFlow(
       }
     });
 
-    // 8️⃣ Return enriched response
     const finalOutput = {
       ...resultObj,
       __storage: storageResult,
