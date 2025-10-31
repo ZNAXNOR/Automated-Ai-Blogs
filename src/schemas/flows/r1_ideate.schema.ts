@@ -1,26 +1,10 @@
 import { z } from 'zod';
+import { r0_trends_output } from './r0_trends.schema';
 
-const suggestionSchema = z.object({
-  topic: z.string().min(1, 'Topic cannot be empty'),
-  score: z.number().min(100).optional().default(0.5),
-});
-
-const resultSchema = z.object({
-  topic: z.string().min(1),
-  suggestions: z.array(suggestionSchema).optional().default([]),
-  trendTimeline: z.array(z.any()).optional().default([]),
-});
-
-export const r1_ideate_input = z.object({
+export const r1_ideate_input = r0_trends_output.extend({
   pipelineId: z.string(),
-  topic: z.string().optional(), // single topic (fallback)
-  seedPrompt: z.string().optional(), // manual seed
-  aggregatedTopics: z.array(z.string()).optional(), // from trend aggregation
-  suggestions: z.array(suggestionSchema).optional(), // flattened suggestions
-  results: z.array(resultSchema).optional(), // structured r0 output
-  trendTimeline: z.array(z.any()).optional(), // timeline data if directly passed
+  seedPrompt: z.string().optional(),
 });
-
 
 export const referenceSchema = z.object({
   url: z.string().url(),

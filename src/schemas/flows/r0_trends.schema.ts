@@ -8,12 +8,12 @@ export const r0_trends_input = z.object({
   relatedLimit: z.number().optional(),
 });
 
-const trendSuggestion = z.object({
+export const trendSuggestion = z.object({
   topic: z.string(),
   score: z.number(),
 });
 
-const trendTimelinePoint = z.object({
+export const trendTimelinePoint = z.object({
   time: z.date(),
   value: z.number(),
 });
