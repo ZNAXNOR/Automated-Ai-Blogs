@@ -1,6 +1,6 @@
 import { ai } from '../../clients/genkitInstance.client';
 import { z } from 'zod';
-import { r1_ideate_output } from '../../schemas/flows/r1_ideate.schema';
+import { r1_ideate_prompt_output } from '../../schemas/flows/r1_ideate.schema';
 import { googleSearchTool } from '@src/tools';
 
 export const ideationPrompt = ai.definePrompt({
@@ -18,7 +18,7 @@ export const ideationPrompt = ai.definePrompt({
   },
 
   output: {
-    schema: r1_ideate_output,
+    schema: r1_ideate_prompt_output,
   },
 
   config: {

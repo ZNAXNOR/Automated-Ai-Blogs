@@ -24,7 +24,8 @@ export function getRoundFolder(round: string): string {
 
 /** Generate canonical GCS file path */
 export function makeGCSPath(pipelineId: string, round: string, ext = 'json'): string {
-  const folder = getRoundFolder(round);
-  const fileName = `${pipelineId}_${round}.${ext}`;
-  return `gs://${GCS_BUCKET_NAME}/${folder}/${fileName}`;
+  const roundFolder = getRoundFolder(round);
+  const pipelineFolder = `${pipelineId}`
+  const fileName = `${round}.${ext}`;
+  return `gs://${GCS_BUCKET_NAME}/${roundFolder}/${pipelineFolder}/${fileName}`;
 }

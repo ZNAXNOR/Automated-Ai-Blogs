@@ -1,22 +1,11 @@
 import { ai } from '../clients/genkitInstance.client';
 import { r1_ideate_input, r1_ideate_output } from '../schemas/flows/r1_ideate.schema';
 import { safeParseJsonFromAI } from '../clients/aiParsing.client';
-import admin from 'firebase-admin';
+import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 import { fetchNewsForTopics } from '../clients/google/googleNews.client';
-import { googleSearchTool } from '../tools/googleSearch.tool'; // conditional tool
+import { googleSearchTool } from '../tools/googleSearch.tool';
 
 console.log('[r1_ideate]      Flow module loaded');
-
-// ---------- Firestore init ----------
-if (!admin.apps.length) admin.initializeApp();
-const firestore = admin.firestore();
-
-// ---------- Optional artifact saver ----------
-let saveArtifact: ((key: string, value: any) => Promise<void>) | undefined;
-try {
-  const artifacts = require('../lib/artifacts');
-  saveArtifact = artifacts?.saveArtifact;
-} catch {}
 
 // ---------- Helper: pick best topic list ----------
 function pickTopicArray(input: any): string[] | null {
@@ -48,40 +37,38 @@ export const r1_ideate = ai.defineFlow(
     const topicArray = pickTopicArray(parsedInput);
     if (!topicArray?.length) throw new Error('No usable topic array found in input.');
 
-    // 1️⃣ Fetch related news
-    let headlines = await fetchNewsForTopics(topicArray);
+    const { pipelineId } = parsedInput;
 
-    // 2️⃣ Decide whether to use search tool as a fallback.
+    // 1️⃣ Fetch related news
+    const headlines = await fetchNewsForTopics(topicArray);
+
+    // 2️⃣ Decide whether to use search tool as fallback
     const useSearchTool = !headlines?.length || headlines.length < 3;
-    if (useSearchTool) {
-      console.log('[r1_ideate] Using GoogleSearchTool fallback...');
-    }
+    if (useSearchTool) console.log('[r1_ideate] Using GoogleSearchTool fallback...');
 
     const newsSummary = headlines.length
       ? `Here are some recent headlines:\n${headlines.map((h) => `- ${h}`).join('\n')}`
       : 'No related live news found; rely purely on trend input.';
 
-    // 3️⃣ Call prompt, dynamically providing tools if needed.
+    // 3️⃣ Prompt call
     const promptFn = ai.prompt(
       useSearchTool ? 'Round1_IdeationPrompt_With_Search' : 'Round1_IdeationPrompt'
     );
     let resp;
     try {
       resp = await promptFn(
-        { // Prompt Input
+        {
           trendInput: topicArray.join(', '),
           recentNews: newsSummary,
         },
-        { // Options
-          tools: useSearchTool ? [googleSearchTool] : [],
-        }
+        { tools: useSearchTool ? [googleSearchTool] : [] }
       );
     } catch (err) {
       console.error('[r1_ideate] Prompt call failed:', err);
       throw new Error('Prompt execution error in r1_ideate');
     }
 
-    // 4️⃣ Parse model output
+    // 4️⃣ Parse AI output
     const raw = resp.text ?? (resp.output ? JSON.stringify(resp.output) : undefined);
     if (!raw) throw new Error('Prompt returned no usable result');
 
@@ -93,10 +80,11 @@ export const r1_ideate = ai.defineFlow(
       throw new Error('Failed to parse prompt output');
     }
 
-    // Add timestamp
-    ideationObj.timestamp = new Date().toISOString();
+    // 5️⃣ Normalize + timestamp
+    ideationObj.pipelineId = pipelineId;
+    ideationObj.topic = topicArray[0];
+    ideationObj.createdAt = new Date().toISOString();
 
-    // 🔹 Normalize references before saving
     if (ideationObj.references?.length) {
       const seen = new Set();
       ideationObj.references = ideationObj.references.filter((r: any) => {
@@ -106,33 +94,50 @@ export const r1_ideate = ai.defineFlow(
       });
     }
 
-    // 5️⃣ Validate schema
+    // 6️⃣ Validate schema
     r1_ideate_output.parse(ideationObj);
 
-    // 6️⃣ Persist to Firestore
-    try {
-      await firestore.collection('r1_ideate_results').add({
-        ...ideationObj,
-        topicsUsed: topicArray,
-        headlines,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        rawModelOutput: raw,
-        references: ideationObj.references || [],
-      });
-    } catch (err) {
-      console.warn('r1_ideate: failed to persist to Firestore', err);
-    }
+    // 7️⃣ Inline subflow — Round1_Storage
+    const storageResult = await ai.run('Round1_Storage', async () => {
+      const args = { pipelineId, round: 'r1', data: ideationObj, inputMeta: parsedInput };
+      const { pipelineId: pId, round = 'r1', data } = args;
+      const startedAt = new Date().toISOString();
 
-    // 7️⃣ Optional artifact
-    if (saveArtifact) {
       try {
-        await saveArtifact('artifacts.round1', ideationObj);
+        const persistResult = await persistRoundOutput(pId, round, data);
+        return {
+          ok: true,
+          pipelineId: pId,
+          round,
+          persistResult,
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        };
       } catch (err) {
-        console.warn('r1_ideate: failed to save artifact', err);
+        console.error(`[r1_ideate:Round1_Storage] persistRoundOutput failed:`, err);
+        return {
+          ok: false,
+          pipelineId: pId,
+          round,
+          error: String(err),
+          startedAt,
+          finishedAt: new Date().toISOString(),
+        };
       }
-    }
+    });
 
-    console.log('[r1_ideate] ✅ Success:', ideationObj.title);
-    return ideationObj;
+    // 8️⃣ Return enriched response
+    const finalOutput = {
+      ...ideationObj,
+      __storage: storageResult,
+    };
+
+    console.log('[r1_ideate] ✅ Completed successfully:', {
+      pipelineId,
+      ideas: ideationObj.ideas?.length ?? 0,
+      gcsPath: storageResult?.persistResult?.gcsPath,
+    });
+
+    return finalOutput;
   }
 );
