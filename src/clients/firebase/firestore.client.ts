@@ -99,14 +99,3 @@ export async function createArticle(data: Article) {
   // the client SDK's DocumentReference type, not the admin one.
   return validateAndWrite('articles', data, ArticleSchema as any);
 }
-
-// ---- Example Usage ----
-// Example needs to be updated for client SDK `doc` helper
-// import { doc } from 'firebase/firestore';
-// const ref = await createArticle({
-//   title: "How AI Shapes SEO in 2025",
-//   slug: "ai-shapes-seo-2025",
-//   status: "scheduled",
-//   category: doc(db, 'categories', 'seo'),
-//   author: doc(db, 'authors', 'john'),
-// });

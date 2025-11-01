@@ -1,21 +1,20 @@
 import { z } from 'zod';
+import { r3_draft_output } from './r3_draft.schema';
 
 /**
  * r4_meta.schema.ts
  *
  * Schema definitions for the Round 4 — Metadata & SEO Enrichment flow.
- * Builds on top of the r3 draft output by taking minimal input fields
- * and generating comprehensive metadata and media guidance.
  */
 
 /**
- * Input schema — minimal fields from previous draft.
+ * Input schema — takes the full output from r3_draft and makes title required.
+ * It also explicitly includes 'topic' and 'tone' which are expected to be passed through.
  */
-export const r4_meta_input = z.object({
-  blogTitle: z.string().describe('Title from the previous ideation or draft stage.'),
-  draftText: z.string().describe('Full draft text from r3_draft output.'),
-  topic: z.string().optional().describe('Main theme or focus of the article.'),
-  tone: z.string().optional().describe('Optional tone or style preferences.'),
+export const r4_meta_input = r3_draft_output.extend({
+  title: z.string().describe("Title from the draft stage. Must be provided."),
+  topic: z.string().optional().describe('Main theme or focus of the article. Overrides topic from previous steps if provided.'),
+  tone: z.string().optional().describe('Optional tone or style preferences. Overrides tone from previous steps if provided.'),
 });
 
 /**
@@ -30,9 +29,9 @@ export const ImagePromptSchema = z.object({
 });
 
 /**
- * Output schema — full metadata and enrichment information.
+ * Output schema — full metadata and enrichment information, plus pipelineId.
  */
-export const r4_meta_output = z.object({
+const metaOutputCore = z.object({
   title: z.string(),
   slug: z.string(),
   seoDescription: z.string(),
@@ -42,6 +41,10 @@ export const r4_meta_output = z.object({
   readingLevel: z.enum(['Beginner', 'Intermediate', 'Expert']),
   featuredImage: ImagePromptSchema,
   additionalImages: z.array(ImagePromptSchema).optional(),
+});
+
+export const r4_meta_output = metaOutputCore.extend({
+    pipelineId: z.string(),
 });
 
 /**

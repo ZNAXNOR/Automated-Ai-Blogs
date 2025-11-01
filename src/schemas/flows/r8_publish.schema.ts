@@ -1,29 +1,15 @@
-// r8_publish.schema.ts
 import { z } from "zod";
-import { ImagePromptSchema } from "./r4_meta.schema";
+import { r4_meta_output, ImagePromptSchema } from "./r4_meta.schema";
+import { r5_polish_output } from "./r5_polish.schema";
 
 /**
- * Meta object coming from r4 (trimmed to the fields we need for publishing)
- */
-export const R4MetaSchema = z.object({
-  title: z.string().min(1),
-  slug: z.string().optional(),
-  seoDescription: z.string().optional(),
-  seoKeywords: z.array(z.string()).optional(),
-  tags: z.array(z.string()).optional(),
-  primaryCategory: z.string().optional(),
-  readingLevel: z.string().optional(),
-  // featuredImage and additionalImages are image prompt descriptors (not WP media IDs)
-  featuredImage: ImagePromptSchema.optional(),
-  additionalImages: z.array(ImagePromptSchema).optional(),
-});
-
-/**
- * Input schema for r8_publish (updated to accept polishedBlog + meta)
+ * Input schema for r8_publish
+ * Combines the final polished blog content with the necessary metadata.
  */
 export const r8_publish_input = z.object({
-  polishedBlog: z.string().min(1).describe("Final blog content (Markdown or HTML) from r5"),
-  meta: R4MetaSchema,
+  pipelineId: z.string(),
+  polishedBlog: r5_polish_output.shape.polishedBlog,
+  meta: r4_meta_output,
   // optional scheduling override
   publishAt: z
     .string()
@@ -40,9 +26,10 @@ export type R8PublishInput = z.infer<typeof r8_publish_input>;
 
 /**
  * Output schema for r8_publish
- * Mirrors useful WP return fields and provides rawResponse for debugging (optional)
+ * Returns the results of the publishing action, along with the pipelineId.
  */
 export const r8_publish_output = z.object({
+  pipelineId: z.string(),
   id: z.number().optional(),
   link: z.string().url().optional(),
   status: z.string().optional(),
