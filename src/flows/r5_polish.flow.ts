@@ -3,6 +3,7 @@ import { polishPrompt } from "@src/prompts/flows/r5_polish.prompt";
 import { r5_polish_input, r5_polish_output } from "@src/schemas/flows/r5_polish.schema";
 import { safeParseJsonFromAI } from "@src/clients/aiParsing.client";
 import { z } from "zod";
+import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 
 console.log("[r5_polish]      Flow module loaded");
 
@@ -13,20 +14,19 @@ export const r5_polish = ai.defineFlow(
     outputSchema: r5_polish_output,
   },
   async (input) => {
-    // Safely resolve title/topic
-    const blogTitle = input.blogTitle ?? input.meta?.title ?? "Untitled Blog";
-    const topic = input.topic ?? blogTitle;
+    const { pipelineId, draft, meta, tone } = input;
+    const blogTitle = meta?.title ?? draft?.title ?? "Untitled Blog";
+    const topic = meta?.primaryCategory ?? blogTitle;
     console.log(`[r5_polish] Flow invoked for: "${blogTitle}"`);
 
     let parsed: z.infer<typeof r5_polish_output> | null = null;
     let attempt = 0;
     const maxRetries = 2;
 
-    // Merge section drafts if provided, else fallback to full draft
     const draftText =
-      input.fullDraft ??
-      input.draft
-        ?.map((s) => (s.heading ? `${s.heading}\n${s.content}` : s.content))
+      draft?.fullDraft ??
+      draft?.sections
+        ?.map((s: any) => (s.heading ? `${s.heading}\n${s.content}` : s.content))
         .join("\n\n") ??
       "";
 
@@ -36,21 +36,24 @@ export const r5_polish = ai.defineFlow(
         const llmResponse = await polishPrompt({
           blogTitle,
           topic,
-          tone: input.tone,
+          tone: tone,
           fullDraft: draftText,
-          meta: input.meta,
+          meta: meta,
         });
 
         const rawResponse = llmResponse.text;
         console.log(`[r5_polish] Raw AI response (attempt ${attempt}):`, rawResponse);
 
-        parsed = safeParseJsonFromAI(rawResponse) as z.infer<typeof r5_polish_output>;
-
-        if (!parsed) {
-          console.warn(`[r5_polish] Invalid JSON output (attempt ${attempt})`);
+        const tempParsed = safeParseJsonFromAI(rawResponse);
+        if (tempParsed) {
+            tempParsed.pipelineId = pipelineId;
+            r5_polish_output.parse(tempParsed);
+            parsed = tempParsed as z.infer<typeof r5_polish_output>;
+        } else {
+            console.warn(`[r5_polish] Invalid JSON structure (attempt ${attempt})`);
         }
       } catch (err) {
-        console.error(`[r5_polish] Error parsing AI response (attempt ${attempt}):`, err);
+        console.error(`[r5_polish] Error parsing or validating AI response (attempt ${attempt}):`, err);
       }
     }
 
@@ -58,16 +61,58 @@ export const r5_polish = ai.defineFlow(
         console.warn("[r5_polish] No images were used in output");
     }
 
-    // Fallback in case parsing fails
     if (!parsed) {
       console.warn("[r5_polish] Fallback: using raw input as polished output");
       parsed = {
+        pipelineId,
         polishedBlog: draftText,
         readability: { fkGrade: 55 },
+        usedImages: [],
       };
     }
 
-    console.log(`[r5_polish] Completed successfully for "${blogTitle}"`);
-    return parsed;
+    const storageResult = await ai.run('Round5_Polish_Storage', async () => {
+        const args = { pipelineId, round: 'r5', data: parsed, inputMeta: input };
+        const { pipelineId: pId, round, data } = args;
+        const startedAt = new Date().toISOString();
+
+        try {
+            const persistResult = await persistRoundOutput(pId, round, data);
+            return {
+                ok: true,
+                pipelineId: pId,
+                round,
+                persistResult,
+                startedAt,
+                finishedAt: new Date().toISOString(),
+            };
+        } catch (err) {
+            console.error(`[r5_polish:Round5_Storage] persistRoundOutput failed:`, err);
+            const errorMessage = err instanceof Error ? err.stack : String(err);
+            return {
+                ok: false,
+                pipelineId: pId,
+                round,
+                error: errorMessage,
+                startedAt,
+                finishedAt: new Date().toISOString(),
+            };
+        }
+      });
+      
+      console.log({
+        flow: 'r5_polish',
+        stage: 'storage_complete',
+        message: '✅ Storage operation completed',
+        pipelineId: input.pipelineId,
+        gcsPath: storageResult?.persistResult?.gcsPath,
+      });
+
+      const finalOutput = {
+          ...parsed,
+          __storage: storageResult,
+      };
+
+      return finalOutput;
   }
 );

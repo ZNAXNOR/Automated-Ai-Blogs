@@ -38,6 +38,7 @@ export async function persistRoundOutput(
 
   switch (round) {
     case 'r0':
+
     case 'r1':
       const topicRef = doc(db, 'topics', pipelineId);
       const topicData = {
@@ -67,7 +68,22 @@ export async function persistRoundOutput(
       pipelineUpdateData.metadataRef = metaRef;
       break;
     }
+
     case 'r4':
+
+    case 'r5': {
+        const metaRef = doc(db, 'metadata', pipelineId);
+        const roundMetadata = {
+            usedImages: data.usedImages ?? [],
+        };
+        const dataToSet = { pipelineId, ...roundMetadata, updatedAt: createdAt };
+        const sanitizedData = JSON.parse(JSON.stringify(dataToSet));
+        batch.set(metaRef, sanitizedData, { merge: true });
+        firestorePaths.push(metaRef.path);
+        pipelineUpdateData.metadataRef = metaRef;
+        break;
+    }
+
     case 'r8': {
       const metaRef = doc(db, 'metadata', pipelineId);
       const roundMetadata = {
@@ -78,6 +94,7 @@ export async function persistRoundOutput(
         status: data.status || (round === 'r8' ? 'published' : 'in_review'),
         ...data,
       };
+      
       pipelineUpdateData.title = data.title;
       pipelineUpdateData.status = data.status || (round === 'r8' ? 'published' : 'in_review');
 
