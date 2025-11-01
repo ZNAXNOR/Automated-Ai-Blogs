@@ -83,8 +83,8 @@ export const r2_angle = ai.defineFlow(
     try {
       console.log('[r2_angle] Running grounded prompt...');
       resp = await runAnglePrompt({
-        topicIdea,
-        researchNotes,
+        topicIdea: JSON.stringify(topicIdea),
+        researchNotes: JSON.stringify(researchNotes),
       });
     } catch (err) {
       console.error('[r2_angle] Angle synthesis prompt failed:', err);

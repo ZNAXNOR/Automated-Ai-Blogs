@@ -7,11 +7,11 @@ import { r2_angle_output } from '../../schemas/flows/r2_angle.schema';
  * -------------------
  * Consumes topic ideas + grounded research notes (tool outputs)
  * to create a well-structured blog outline with factual grounding.
- * 
+ *
  * - No hallucination: Only use `researchNotes.summary` for factual content.
  * - `topicIdea` provides the intent and direction.
  * - `researchNotes` are tool-generated, factual, and immutable.
- * 
+ *
  * This prompt does *not* call the urlContextTool itself — it *consumes*
  * the tool results provided by the r2 flow.
  */
@@ -20,7 +20,7 @@ export const anglePrompt = ai.definePrompt({
   name: 'Round2_AnglePrompt',
   description:
     'Synthesizes a grounded blog outline using topic ideas and factual research notes.',
-  model: 'googleai/gemini-2.0-flash',
+  model: 'googleai/gemini-2.5-flash',
 
   input: {
     schema: z.object({
@@ -50,7 +50,6 @@ export const anglePrompt = ai.definePrompt({
           wordCount: z.number().optional(),
         })
       ),
-      userInput: z.string().describe('Factual context text passed from flow'),
     }),
   },
 
@@ -66,13 +65,11 @@ You are a precise blog strategy and content planning assistant.
 You will synthesize a structured outline grounded **only** in verified research notes.
 
 TASK:
-1. Review the user's topic ideas in {{topicIdea}}.
-2. Review the factual summaries and metadata in {{researchNotes}}.
-3. Use this grounded input text for factual reference: 
-    {{userInput}}
-4. Create a comprehensive blog outline that reflects SEO intent, topical authority, and logical flow.
-5. Use information *strictly* from researchNotes summaries — do NOT invent or assume data.
-6. Include:
+1. Review the user's topic ideas.
+2. Review the factual summaries and metadata.
+3. Create a comprehensive blog outline that reflects SEO intent, topical authority, and logical flow.
+4. Use information *strictly* from researchNotes summaries — do NOT invent or assume data.
+5. Include:
    - Introduction
    - 5–8 main sections (id: s1, s2, ...)
    - Each section has: heading, 3–5 concise bullets, estWords (estimated word count)
@@ -83,6 +80,13 @@ STYLE:
 - No marketing fluff.
 - Sections should logically follow the topic’s purpose.
 - Every statement must trace back to a research note summary.
+
+TOPIC IDEAS:
+{{topicIdea}}
+
+RESEARCH NOTES:
+{{researchNotes}}
+
 
 OUTPUT FORMAT:
 Return ONLY valid JSON matching r2_angle_output schema.
