@@ -87,16 +87,12 @@ export async function persistRoundOutput(
     case 'r8': {
       const metaRef = doc(db, 'metadata', pipelineId);
       const roundMetadata = {
-        title: data.title,
-        slug: data.slug,
-        tags: data.tags,
-        category: data.category,
-        status: data.status || (round === 'r8' ? 'published' : 'in_review'),
-        ...data,
+        wordpressLink: data.wordpressResponse?.link,
+        status: data.wordpressResponse?.status || 'published',
       };
       
-      pipelineUpdateData.title = data.title;
-      pipelineUpdateData.status = data.status || (round === 'r8' ? 'published' : 'in_review');
+      pipelineUpdateData.title = data.publishInput?.meta?.title;
+      pipelineUpdateData.status = data.wordpressResponse?.status || 'published';
 
       const dataToSet = { pipelineId, ...roundMetadata, updatedAt: createdAt };
       const sanitizedData = JSON.parse(JSON.stringify(dataToSet));

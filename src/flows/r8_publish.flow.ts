@@ -2,6 +2,7 @@
 import { ai } from "../clients/genkitInstance.client"; // adjust path to your genkit client
 import { r8_publish_input, r8_publish_output, R8PublishInput } from "../schemas/flows/r8_publish.schema";
 import wordpressClient from "../clients/wordpress.client";
+import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 
 let marked: any = null;
 /**
@@ -149,6 +150,10 @@ export const r8_publish = ai.defineFlow(
     outputSchema: r8_publish_output,
   },
   async (input: R8PublishInput) => {
+    const pipelineId = (input as any).pipelineId;
+    if (!pipelineId) {
+      console.warn("[r8_publish] Warning: pipelineId is missing. Storage will be skipped.");
+    }
     try {
       // Build payload (incl. category/tag ensuring)
       const payload = await buildPostPayload(input);
@@ -169,6 +174,7 @@ export const r8_publish = ai.defineFlow(
       const wpResponse = await wordpressClient.createPost(payload);
 
       const output = {
+        pipelineId,
         id: typeof wpResponse.id === "number" ? wpResponse.id : undefined,
         link: wpResponse.link,
         status: wpResponse.status,
@@ -183,7 +189,49 @@ export const r8_publish = ai.defineFlow(
       };
 
       const parsed = r8_publish_output.parse(output);
-      return parsed;
+
+      let storageResult: any;
+      if (pipelineId) {
+        storageResult = await ai.run('Round8_Publish_Storage', async () => {
+          const dataToStore = {
+            publishInput: input,
+            wordpressResponse: wpResponse,
+          };
+          const args = { pipelineId, round: 'r8', data: dataToStore, inputMeta: input };
+          const { pipelineId: pId, round, data } = args;
+          const startedAt = new Date().toISOString();
+
+          try {
+            const persistResult = await persistRoundOutput(pId, round, data);
+            return {
+              ok: true,
+              pipelineId: pId,
+              round,
+              persistResult,
+              startedAt,
+              finishedAt: new Date().toISOString(),
+            };
+          } catch (err: any) {
+            console.error(`[r8_publish:Round8_Publish_Storage] persistRoundOutput failed:`, err);
+            return {
+              ok: false,
+              pipelineId: pId,
+              round,
+              error: err.message ?? String(err),
+              startedAt,
+              finishedAt: new Date().toISOString(),
+            };
+          }
+        });
+        console.log('[r8_publish] Round8_Publish_Storage span result:', storageResult);
+      } else {
+        storageResult = { ok: false, error: "Skipped: pipelineId was not provided." };
+      }
+
+      return {
+        ...parsed,
+        __storage: storageResult,
+      };
     } catch (err: any) {
       // eslint-disable-next-line no-console
       console.error("[r8_publish] Error creating post", {
@@ -197,6 +245,7 @@ export const r8_publish = ai.defineFlow(
         "Unknown error while creating WordPress post";
 
       return r8_publish_output.parse({
+        pipelineId,
         message: `Publish failed: ${errorMessage}`,
         rawResponse: err?.response?.data ?? { error: err?.message ?? String(err) },
       });
