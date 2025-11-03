@@ -85,8 +85,7 @@ export const r4_meta = ai.defineFlow(
 
       // Inline subflow — Round4_Storage
       const storageResult = await ai.run('Round4_Storage', async () => {
-        const { additionalImages, status, readingLevel, ...storageData } = parsed as any;
-        const args = { pipelineId: parsed.pipelineId, round: 'r4', data: storageData, inputMeta: input };
+        const args = { pipelineId: parsed.pipelineId, round: 'r4', data: parsed, inputMeta: input };
         const { pipelineId: pId, round, data } = args;
         const startedAt = new Date().toISOString();
 

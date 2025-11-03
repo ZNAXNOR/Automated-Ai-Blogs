@@ -4,8 +4,22 @@ import { safeParseJsonFromAI } from '../clients/aiParsing.client';
 import { persistRoundOutput } from '../adapters/roundStorage.adapter';
 import { fetchNewsForTopics } from '../clients/google/googleNews.client';
 import { googleSearchTool } from '../tools/googleSearch.tool';
+// Import Firestore client and modular functions
+import { db } from '../clients/firebase/firestore.client';
+import { doc, setDoc } from 'firebase/firestore';
 
 console.log('[r1_ideate]      Flow module loaded');
+
+// ---------- Helper: Store used topic in Firestore ----------
+async function storeUsedTopic(topic: string, pipelineId: string) {
+  if (!topic) return;
+  const docRef = doc(db, 'usedTopics', topic.toLowerCase());
+  await setDoc(docRef, { 
+    usedAt: new Date().toISOString(),
+    pipelineId: pipelineId
+  }, { merge: true });
+  console.log(`[r1_ideate] Marked topic "${topic}" as used in Firestore with pipelineId: ${pipelineId}.`);
+}
 
 // ---------- Helper: pick best topic list ----------
 function pickTopicArray(input: any): string[] | null {
@@ -37,7 +51,11 @@ export const r1_ideate = ai.defineFlow(
     const topicArray = pickTopicArray(parsedInput);
     if (!topicArray?.length) throw new Error('No usable topic array found in input.');
 
+    const mainTopic = topicArray[0];
     const { pipelineId } = parsedInput;
+    
+    // Store the main topic as used
+    await storeUsedTopic(mainTopic, pipelineId);
 
     // 1️⃣ Fetch related news
     const headlines = await fetchNewsForTopics(topicArray);
@@ -63,9 +81,9 @@ export const r1_ideate = ai.defineFlow(
         },
         { tools: useSearchTool ? [googleSearchTool] : [] }
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('[r1_ideate] Prompt call failed:', err);
-      throw new Error('Prompt execution error in r1_ideate');
+      throw new Error(`Prompt execution error in r1_ideate: ${err.message}`);
     }
 
     // 4️⃣ Parse AI output
@@ -82,7 +100,7 @@ export const r1_ideate = ai.defineFlow(
 
     // 5️⃣ Normalize + timestamp
     ideationObj.pipelineId = pipelineId;
-    ideationObj.topic = topicArray[0];
+    ideationObj.topic = mainTopic;
     ideationObj.createdAt = new Date().toISOString();
 
     if (ideationObj.references?.length) {

@@ -11,7 +11,12 @@ export interface UrlContext {
 }
 
 export async function fetchUrlContext(rawUrl: string): Promise<UrlContext> {
-  const res = await axios.get(rawUrl, { timeout: 10_000 });
+  const res = await axios.get(rawUrl, {
+    timeout: 10_000,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+    },
+  });
   const html = res.data as string;
   const $ = cheerio.load(html);
 

@@ -36,11 +36,9 @@ export async function persistRoundOutput(
     updatedAt: createdAt
   };
 
-  switch (round) {
-    case 'r0':
-
+  switch (round) {      
     case 'r1':
-      const topicRef = doc(db, 'topics', pipelineId);
+      const topicRef = doc(db, 'usedTopics', data.topic.toLowerCase(), 'details', pipelineId);
       const topicData = {
         pipelineId,
         title: data.topic || data.title || 'Untitled Topic',
@@ -70,14 +68,34 @@ export async function persistRoundOutput(
     }
 
     case 'r4':
-
     case 'r5': {
         const metaRef = doc(db, 'metadata', pipelineId);
-        const roundMetadata = {
-            usedImages: data.usedImages ?? [],
+        
+        // Destructure image-related fields and keep the rest
+        const {
+            featuredImage,
+            usedImages,
+            ...restOfData
+        } = data;
+
+        // Prepare the data for setting in Firestore
+        const updatePayload: { [key: string]: any } = {
+            pipelineId,
+            ...restOfData, // Spread the non-image fields
+            updatedAt: createdAt,
         };
-        const dataToSet = { pipelineId, ...roundMetadata, updatedAt: createdAt };
-        const sanitizedData = JSON.parse(JSON.stringify(dataToSet));
+
+        // Use dot notation to update nested fields within the 'images' map.
+        // This ensures we can add/update image fields without overwriting the whole map.
+        if (featuredImage) {
+            updatePayload['images.featured'] = featuredImage;
+        }
+        if (usedImages) {
+            updatePayload['images.used'] = usedImages;
+        }
+
+        const sanitizedData = JSON.parse(JSON.stringify(updatePayload));
+
         batch.set(metaRef, sanitizedData, { merge: true });
         firestorePaths.push(metaRef.path);
         pipelineUpdateData.metadataRef = metaRef;

@@ -5,17 +5,58 @@ import { fetchGoogleTrends } from '../clients/google/googleTrends.client';
 import { normalizeTopicList } from '../utils/normalize.util';
 import { sanitizeTopics } from '../utils/topicSanitizer.util';
 import { BLOG_TOPICS } from '../clients/blogTopic.client';
-
 import { v4 as uuidv4 } from 'uuid';
-
-// --- Storage adapter import (r0 storage) ---
 import { persistRoundOutput } from '../adapters/roundStorage.adapter';
+// Import Firestore client and modular functions
+import { db } from '../clients/firebase/firestore.client';
+import { collection, doc, getDocs, setDoc } from 'firebase/firestore';
 
 const SERPAPI_KEY = defineSecret('SERPAPI_KEY');
 
-console.log('[r0_trends]      Flow module loaded (multi-topic support, sanitized output)');
+console.log('[r0_trends]      Flow module loaded');
+
+// Helper to generate a formatted pipeline ID
+function generatePipelineId(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');
+  const day = now.getDate().toString().padStart(2, '0');
+  const randomString = uuidv4().split('-')[0]; // Use a portion of the UUID for brevity
+  return `${year}-${month}-${day}-${randomString}`;
+}
 
 type Suggestion = { topic: string; score: number };
+
+// Helper to get used topics from Firestore
+async function getUsedTopics(): Promise<Set<string>> {
+  const usedTopicsCollection = collection(db, 'usedTopics');
+  const snapshot = await getDocs(usedTopicsCollection);
+  const topics = new Set<string>();
+  snapshot.forEach((doc : any) => {
+    topics.add(doc.id);
+  });
+  console.log(`[r0_trends] Fetched ${topics.size} used topics from Firestore.`);
+  return topics;
+}
+
+// Helper to store new topics in Firestore
+async function storeNewTopics(category: string, topics: Suggestion[]) {
+  if (topics.length === 0) {
+    console.log(`[r0_trends] No new topics to store for category: ${category}`);
+    return;
+  }
+
+  const now = new Date();  
+  const year = `${now.getFullYear()}`;
+  const month = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}`;
+  const docRef = doc(db, 'topics', category, year, month);
+
+  // Sort topics by score in ascending order
+  const sortedTopics = [...topics].sort((a, b) => a.score - b.score);
+
+  await setDoc(docRef, { topics: sortedTopics }, { merge: true });
+  console.log(`[r0_trends] Stored ${sortedTopics.length} new topics for category "${category}" in month "${month}".`);
+}
 
 export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_output>(
   {
@@ -25,6 +66,9 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
   },
   async (input) => {
     console.log('[r0_trends] Input received:', input);
+
+    // Fetch used topics from Firestore
+    const usedTopics = await getUsedTopics();
 
     const apiKey = SERPAPI_KEY.value();
     if (!apiKey) throw new Error('[r0_trends] SERPAPI_KEY not defined.');
@@ -62,26 +106,32 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
         const filteredSuggestions = result.suggestions.filter((s: Suggestion) => s.score >= 100);
 
         // Apply sanitization for API-safe topics
-        const sanitizedSuggestions = sanitizeTopics(
+        const sanitizedSuggestionTopics = sanitizeTopics(
           filteredSuggestions.map((s: Suggestion) => s.topic)
         );
 
         // Map back to scores
-        const finalSuggestions = sanitizedSuggestions.map((topicStr) => ({
+        const finalSuggestionsWithScores = sanitizedSuggestionTopics.map((topicStr) => ({
           topic: topicStr,
           score:
             filteredSuggestions.find(
               (s: Suggestion) => s.topic.toLowerCase() === topicStr.toLowerCase()
             )?.score ?? 0,
         }));
+        
+        // Filter out already used topics
+        const newSuggestions = finalSuggestionsWithScores.filter(s => !usedTopics.has(s.topic.toLowerCase()));
+
+        // Store new topics in Firestore for the current category
+        await storeNewTopics(t, newSuggestions);
 
         results.push({
           topic: t,
-          suggestions: finalSuggestions,
+          suggestions: newSuggestions, // Use the new, filtered suggestions
           trendTimeline: result.trendTimeline,
         });
 
-        allSuggestions.push(...finalSuggestions);
+        allSuggestions.push(...newSuggestions); // Aggregate only new suggestions
         allTimelinePoints.push(...result.trendTimeline);
       } catch (err) {
         console.error(`[r0_trends] Error fetching topic "${t}":`, err);
@@ -103,7 +153,7 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
         topic,
         score: Math.round(v.total / v.count),
       }))
-      .filter((s: Suggestion) => s.score >= 100) // filter again at aggregate level
+      .filter((s: Suggestion) => s.score >= 100)
       .sort((a, b) => b.score - a.score);
 
     const normalizedSuggestions = normalizeTopicList(aggregatedSuggestions);
@@ -126,12 +176,12 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
       aggregatedTopics: topics,
       suggestions: normalizedSuggestions,
       trendTimeline: mergedTimeline,
-      results, // per-topic results preserved
+      results,
     };
 
     console.log('[r0_trends] Aggregated output prepared with sanitized topics.');
 
-    const pipelineId = (input as any).pipelineId ?? uuidv4();
+    const pipelineId = (input as any).pipelineId ?? generatePipelineId();
     let storageResult: any;
 
     try {
@@ -168,13 +218,9 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
       storageResult = { ok: false, error: String(err) };
     }
 
-    // Return the original output but include storage metadata for observability.
-    // Existing consumers that expect the original shape will still receive it unchanged.
     return {
       ...output,
-      // add pipelineId so downstream flows can reference it
       pipelineId,
-      // storage metadata in a clearly namespaced field to avoid collisions
       __storage: storageResult,
     };
   }

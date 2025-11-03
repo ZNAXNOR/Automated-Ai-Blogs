@@ -1,4 +1,3 @@
-// r8_publish.flow.ts
 import { ai } from "../clients/genkitInstance.client"; // adjust path to your genkit client
 import { r8_publish_input, r8_publish_output, R8PublishInput } from "../schemas/flows/r8_publish.schema";
 import wordpressClient from "../clients/wordpress.client";
@@ -97,7 +96,7 @@ async function buildPostPayload(input: R8PublishInput) {
   } else if (statusOverride) {
     payload.status = statusOverride;
   } else {
-    payload.status = "draft";
+    payload.status = "pending";
   }
 
   // categories -> convert primaryCategory string to category ID via WP helper

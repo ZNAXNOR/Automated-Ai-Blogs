@@ -9,10 +9,10 @@ const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || 'ai-blog-bucket';
 /** Map round → subfolder */
 export function getRoundFolder(round: string): string {
   const map: Record<string, string> = {
-    r0: 'topics',
-    r1: 'topics',
-    r2: 'outlines',
-    r3: 'outlines',
+    r0: 'trends',
+    r1: 'topic',
+    r2: 'outline',
+    r3: 'draft',
     r4: 'meta',
     r5: 'polished',
     r6: 'social',
@@ -25,7 +25,11 @@ export function getRoundFolder(round: string): string {
 /** Generate canonical GCS file path */
 export function makeGCSPath(pipelineId: string, round: string, ext = 'json'): string {
   const roundFolder = getRoundFolder(round);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = (now.getMonth() + 1).toString().padStart(2, '0');  
+  const date = `${year}-${month}`;
   const pipelineFolder = `${pipelineId}`
-  const fileName = `${round}.${ext}`;
-  return `gs://${GCS_BUCKET_NAME}/${roundFolder}/${pipelineFolder}/${fileName}`;
+  const fileName = `${round}_${roundFolder}.${ext}`;
+  return `gs://${GCS_BUCKET_NAME}/${date}/${pipelineFolder}/${fileName}`;
 }
