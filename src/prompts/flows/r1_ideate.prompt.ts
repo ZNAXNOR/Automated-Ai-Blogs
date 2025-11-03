@@ -5,7 +5,7 @@ import { r1_ideate_prompt_output } from '../../schemas/flows/r1_ideate.schema';
 export const ideationPrompt = ai.definePrompt({
   name: 'Round1_IdeationPrompt',
   description: 'A prompt that generates a blog post idea based on a trend.',
-  model: 'googleai/gemini-2.0-flash',
+  model: 'googleai/gemini-2.5-flash',
   
   input: {
     schema: z.object({

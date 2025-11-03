@@ -14,7 +14,7 @@ import { r5_polish_output } from "@src/schemas/flows/r5_polish.schema";
 export const polishPrompt = ai.definePrompt({
   name: "Round5_PolishPrompt",
   description: "Humanizes and polishes a draft blog while keeping its structure, intent, and context.",
-  model: "googleai/gemini-2.5-flash",
+  model: "googleai/gemini-2.5-pro",
   input: {
     schema: z.object({
       blogTitle: z.string(),

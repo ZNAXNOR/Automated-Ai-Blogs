@@ -6,7 +6,7 @@ import { googleSearchTool } from '@src/tools';
 export const ideationPromptWithSearch = ai.definePrompt({
 name: 'Round1_IdeationPrompt_With_Search',
 description: 'Guaranteed Google Search tool invocation for context enrichment.',
-model: 'googleai/gemini-2.0-flash',
+model: 'googleai/gemini-2.5-flash',
 tools: [googleSearchTool],
 
 input: {

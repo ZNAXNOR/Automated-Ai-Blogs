@@ -29,4 +29,5 @@ export const r1_ideate_prompt_output = z.object({
 // Schema for the overall flow output, which includes the pipelineId
 export const r1_ideate_output = r1_ideate_prompt_output.extend({
   pipelineId: z.string(),
+  topic: z.string(),
 });

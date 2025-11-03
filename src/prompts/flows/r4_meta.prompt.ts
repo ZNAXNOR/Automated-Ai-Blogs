@@ -5,7 +5,7 @@ import { r4_meta_output } from '../../schemas/flows/r4_meta.schema';
 export const metaPrompt = ai.definePrompt({
   name: 'Round4_MetaPrompt',
   description: 'Generates SEO metadata, keywords, and image guidance from the draft text.',
-  model: 'googleai/gemini-2.0-flash',
+  model: 'googleai/gemini-2.5-flash',
   input: {
     schema: z.object({
       blogTitle: z.string(),
