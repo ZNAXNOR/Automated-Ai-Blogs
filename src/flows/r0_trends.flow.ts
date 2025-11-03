@@ -15,16 +15,6 @@ const SERPAPI_KEY = defineSecret('SERPAPI_KEY');
 
 console.log('[r0_trends]      Flow module loaded');
 
-// Helper to generate a formatted pipeline ID
-function generatePipelineId(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = (now.getMonth() + 1).toString().padStart(2, '0');
-  const day = now.getDate().toString().padStart(2, '0');
-  const randomString = uuidv4().split('-')[0]; // Use a portion of the UUID for brevity
-  return `${year}-${month}-${day}-${randomString}`;
-}
-
 type Suggestion = { topic: string; score: number };
 
 // Helper to get used topics from Firestore
@@ -66,6 +56,11 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
   },
   async (input) => {
     console.log('[r0_trends] Input received:', input);
+
+    const pipelineId = (input as any).pipelineId;
+    if (!pipelineId) {
+      throw new Error('[r0_trends] A pipelineId must be provided as input.');
+    }
 
     // Fetch used topics from Firestore
     const usedTopics = await getUsedTopics();
@@ -181,7 +176,6 @@ export const r0_trends = ai.defineFlow<typeof r0_trends_input, typeof r0_trends_
 
     console.log('[r0_trends] Aggregated output prepared with sanitized topics.');
 
-    const pipelineId = (input as any).pipelineId ?? generatePipelineId();
     let storageResult: any;
 
     try {

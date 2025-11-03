@@ -1,4 +1,4 @@
-// import {orchestrator} from './orchestrator.flow'
+import {orchestrator} from './orchestrator.flow'
 import {r0_trends} from './r0_trends.flow'
 import {r1_ideate} from './r1_ideate.flow'
 import {r2_angle} from './r2_angle.flow'
@@ -10,7 +10,7 @@ import {r5_polish} from './r5_polish.flow'
 import { r8_publish } from './r8_publish.flow'
 
 export const flows = [
-  // orchestrator,
+  orchestrator,
   r0_trends,
   r1_ideate,
   r2_angle,
