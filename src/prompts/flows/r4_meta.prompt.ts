@@ -21,7 +21,6 @@ export const metaPrompt = ai.definePrompt({
   },
   config: {
     temperature: 0.3,
-    maxOutputTokens: 900,
   },
   system: `
 You are an SEO and content strategy expert specializing in metadata generation

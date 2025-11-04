@@ -6,7 +6,6 @@ import './flows/r3_draft.prompt';
 import './flows/r3_draft_section.prompt';
 import './flows/r4_meta.prompt';
 import './flows/r5_polish.prompt';
-import './flows/r6_social.prompt';
 
 import './tools/urlContext.prompt'
 

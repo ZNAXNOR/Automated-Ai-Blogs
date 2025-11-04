@@ -18,6 +18,7 @@ export async function persistRoundOutput(
   data: any
 ): Promise<PersistResult> {
   const gcsPath = makeGCSPath(pipelineId, round);
+  const gcsStoragePath = `gs://${bucket.name}/pipelines/${pipelineId}`;
   const file = bucket.file(gcsPath.replace(`gs://${bucket.name}/`, ''));
   await file.save(JSON.stringify(data, null, 2), {
     resumable: false,
@@ -33,7 +34,8 @@ export async function persistRoundOutput(
 
   const pipelineUpdateData: { [key: string]: any } = {
     pipelineId,
-    updatedAt: createdAt
+    updatedAt: createdAt,
+    gcsStoragePath,
   };
 
   switch (round) {      
@@ -75,6 +77,7 @@ export async function persistRoundOutput(
         const {
             featuredImage,
             usedImages,
+            polishedBlog,
             ...restOfData
         } = data;
 
@@ -105,12 +108,13 @@ export async function persistRoundOutput(
     case 'r8': {
       const metaRef = doc(db, 'metadata', pipelineId);
       const roundMetadata = {
-        wordpressLink: data.wordpressResponse?.link,
-        status: data.wordpressResponse?.status || 'published',
+        wordpressLink: data.output?.link,
+        status: data.output?.status || 'published',
       };
       
-      pipelineUpdateData.title = data.publishInput?.meta?.title;
-      pipelineUpdateData.status = data.wordpressResponse?.status || 'published';
+      pipelineUpdateData.title = data.input?.meta?.title;
+      pipelineUpdateData.status = data.output?.status || 'published';
+      pipelineUpdateData.wordpressLink = data.output?.link;
 
       const dataToSet = { pipelineId, ...roundMetadata, updatedAt: createdAt };
       const sanitizedData = JSON.parse(JSON.stringify(dataToSet));
