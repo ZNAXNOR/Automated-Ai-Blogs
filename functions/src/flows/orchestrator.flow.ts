@@ -1,13 +1,16 @@
 /**
- * @file Manages the end-to-end blog generation pipeline by orchestrating a series of modular flows (rounds).
+ * @file Manages the end-to-end blog generation pipeline by orchestrating \
+ * a series of modular flows (rounds).
  * @author Omkar Dalvi
  *
- * This flow is the main entry point for generating a complete blog post. It sequences through
- * each stage of the content creation process, from initial trend analysis to final publication,
- * passing the output of each step as the input to the next.
+ * This flow is the main entry point for generating a complete blog post.
+ * It sequences through each stage of the content creation process,
+ * from initial trend analysis to final publication, passing the output of
+ * each step as the input to the next.
  *
- * The pipeline is designed for robustness and observability, with detailed logging at each
- * step and a unique `pipelineId` to trace the entire lifecycle of a single run.
+ * The pipeline is designed for robustness and observability,
+ * with detailed logging at each step and a unique `pipelineId`
+ * to trace the entire lifecycle of a single run.
  */
 
 import {ai} from "../clients/genkitInstance.client";
@@ -31,8 +34,9 @@ import {
 console.log("[Orchestrator] Loading orchestrator flow definition");
 
 /**
- * Generates a unique, date-prefixed ID for tracking a single pipeline execution.
- * @return A formatted string, e.g., "2023-10-27-a4e9c1f0".
+ * Generates a unique, date-prefixed ID for tracking a
+ * single pipeline execution.
+ * @return {string} A formatted string, e.g., "2023-10-27-a4e9c1f0".
  */
 function generatePipelineId(): string {
   const now = new Date();
@@ -49,7 +53,7 @@ export const orchestrator = ai.defineFlow(
     inputSchema: orchestratorInput,
     outputSchema: orchestratorOutput,
   },
-  async (input, flow) => {
+  async (input) => {
     const pipelineId = generatePipelineId();
     console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -58,83 +62,112 @@ export const orchestrator = ai.defineFlow(
 
     // -------------------- ROUND 0: Trends Analysis -------------------- //
     console.log("\n▶️ [R0] Starting Trend Analysis...");
-    const r0_input = {
+    const r0Input = {
       topic: Array.isArray(input.topic) && input.topic.length > 0 ?
         input.topic :
         BLOG_TOPICS,
       pipelineId,
     };
-    const r0 = await r0Trends(r0_input);
+    const r0 = await r0Trends(r0Input);
     if (!r0.suggestions || r0.suggestions.length === 0) {
-      throw new Error("[Orchestrator] Aborting: R0 failed to produce any topic suggestions.");
+      throw new Error(
+        "[Orchestrator] Aborting: R0 failed to produce any topic suggestions."
+      );
     }
-    console.log(`✅ [R0] Completed: Found ${r0.suggestions.length} suggestions.`);
+    console.log(`✅ [R0] Completed: Found ${r0.suggestions.length} \
+                  suggestions.`);
 
     // -------------------- ROUND 1: Ideation -------------------- //
     console.log("\n▶️ [R1] Starting Ideation...");
     const r1 = await r1Ideate({...r0, pipelineId});
     if (!r1 || !r1.title) {
-      throw new Error("[Orchestrator] Aborting: R1 failed to generate a blog idea.");
+      throw new Error(
+        "[Orchestrator] Aborting: R1 failed to generate a blog idea."
+      );
     }
-    console.log(`✅ [R1] Completed: Generated idea \"${r1.title}\".`);
+    console.log(`✅ [R1] Completed: Generated idea "${r1.title}".`);
 
     // -------------------- ROUND 2: Angle & Outline -------------------- //
     console.log("\n▶️ [R2] Developing Angle and Outline...");
     const r2 = await r2Angle(r1); // R1 output is the direct input for R2
-    if (!r2.outline || !r2.outline.sections || r2.outline.sections.length === 0) {
-      throw new Error("[Orchestrator] Aborting: R2 failed to produce a structured outline.");
+    if (!r2.outline ||
+        !r2.outline.sections ||
+        r2.outline.sections.length === 0) {
+      throw new Error(
+        "[Orchestrator] Aborting: R2 failed to produce a structured outline."
+      );
     }
-    console.log(`✅ [R2] Completed: Created outline with ${r2.outline.sections.length} sections.`);
+    console.log(
+      `✅ [R2] Completed: Created outline with \
+          ${r2.outline.sections.length} sections.`
+    );
 
     // -------------------- ROUND 3: Drafting -------------------- //
     console.log("\n▶️ [R3] Generating Draft Content...");
     const r3 = await r3Draft(r2); // R2 output is the direct input for R3
     if (!r3.fullDraft) {
-      throw new Error("[Orchestrator] Aborting: R3 failed to produce a draft.");
+      throw new Error(
+        "[Orchestrator] Aborting: R3 failed to produce a draft."
+      );
     }
-    console.log(`✅ [R3] Completed: Draft length is ${r3.fullDraft.length} characters.`);
+    console.log(
+      `✅ [R3] Completed: Draft length is ${r3.fullDraft.length} characters.`
+    );
 
     // -------------------- ROUND 4: Metadata Generation -------------------- //
     console.log("\n▶️ [R4] Creating Metadata (SEO, Tags)...");
-    const r4_input = {
+    const r4Input = {
       ...r3,
       title: r3.title ?? r2.outline.title,
       topic: r1.seed,
       tone: input.tone,
     };
-    const r4 = await r4Meta(r4_input);
+    const r4 = await r4Meta(r4Input);
     if (!r4.title) {
-      throw new Error("[Orchestrator] Aborting: R4 failed to produce metadata.");
+      throw new Error(
+        "[Orchestrator] Aborting: R4 failed to produce metadata."
+      );
     }
-    console.log(`✅ [R4] Completed: Generated metadata for \"${r4.title}\".`);
+    console.log(`✅ [R4] Completed: Generated metadata for "${r4.title}".`);
 
     // -------------------- ROUND 5: Polishing -------------------- //
     console.log("\n▶️ [R5] Polishing Final Content...");
-    const r5_input = {
+    const r5Input = {
       pipelineId,
       draft: r3,
       meta: r4,
       tone: input.tone,
     };
-    const r5 = await r5Polish(r5_input);
+    const r5 = await r5Polish(r5Input);
     if (!r5.polishedBlog) {
-      throw new Error("[Orchestrator] Aborting: R5 failed to produce polished content.");
+      throw new Error(
+        "[Orchestrator] Aborting: R5 failed to produce polished content."
+      );
     }
-    console.log(`✅ [R5] Completed: Polished blog length is ${r5.polishedBlog.length} characters.`);
+    console.log(
+      `✅ [R5] Completed: Polished blog length is \
+          ${r5.polishedBlog.length} characters.`
+    );
 
     // -------------------- ROUND 8: Publishing -------------------- //
     console.log("\n▶️ [R8] Publishing to WordPress...");
-    const r8_input = {
+    const r8Input = {
       pipelineId,
       polishedBlog: r5.polishedBlog,
       meta: r4,
       statusOverride: input.publishStatus,
     };
-    const r8 = await r8Publish(r8_input);
+    const r8 = await r8Publish(r8Input);
     if (!r8.id && r8.status !== "draft") {
-      console.warn(`⚠️ [R8] Publishing may have failed. Message: ${r8.message}`);
+      console.warn(
+        `⚠️ [R8] Publishing may have failed. Message: ${r8.message}`
+      );
     }
-    console.log(`✅ [R8] Completed: Post ID ${r8.id ?? "(none)"}, Status: ${r8.status ?? "unknown"}.`);
+    console.log(
+      `✅ [R8] Completed: Post ID ${r8.id ?? "(none)"}, Status: ${
+        r8.status ?? "unknown"
+      }.`
+    );
 
     // -------------------- FINAL OUTPUT -------------------- //
     console.log(`

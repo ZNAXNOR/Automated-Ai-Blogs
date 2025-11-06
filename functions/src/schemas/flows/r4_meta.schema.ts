@@ -8,13 +8,22 @@ import {r3DraftOutput} from "./r3_draft.schema";
  */
 
 /**
- * Input schema — takes the full output from r3_draft and makes title required.
- * It also explicitly includes 'topic' and 'tone' which are expected to be passed through.
+ * Input schema — takes the full output from r3_draft and makes title
+ * required. It also explicitly includes 'topic' and 'tone' which are
+ * expected to be passed through.
  */
 export const r4MetaInput = r3DraftOutput.extend({
-  title: z.string().describe("Title from the draft stage. Must be provided."),
-  topic: z.string().optional().describe("Main theme or focus of the article. Overrides topic from previous steps if provided."),
-  tone: z.string().optional().describe("Optional tone or style preferences. Overrides tone from previous steps if provided."),
+  title: z.string().describe(
+    "Title from the draft stage. Must be provided."
+  ),
+  topic: z.string().optional().describe(
+    "Main theme or focus of the article. " +
+    "Overrides topic from previous steps if provided."
+  ),
+  tone: z.string().optional().describe(
+    "Optional tone or style preferences. " +
+    "Overrides tone from previous steps if provided."
+  ),
 });
 
 /**

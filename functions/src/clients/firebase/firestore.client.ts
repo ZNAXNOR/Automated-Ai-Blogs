@@ -2,28 +2,37 @@
  * firestore.client.ts
  * -------------------
  * Central Firestore client initialization + typed helpers.
- * Integrates Zod schema validation (runtime) and TypeScript interfaces (compile-time).
+ * Integrates Zod schema validation (runtime) and TypeScript interfaces
+ * (compile-time).
  */
 
-import {initializeApp, getApps, getApp, FirebaseApp} from "firebase/app";
 import {
-  getFirestore, connectFirestoreEmulator, Firestore,
-  DocumentReference, collection, CollectionReference,
-  doc, setDoc, getDocs, query, where, QueryDocumentSnapshot,
+  initializeApp, getApps, getApp, FirebaseApp,
+} from "firebase/app";
+import {
+  getFirestore, connectFirestoreEmulator, Firestore, DocumentReference,
+  collection, CollectionReference, doc, setDoc, getDocs, query, where,
+  QueryDocumentSnapshot, DocumentData,
 } from "firebase/firestore";
 import {z} from "zod";
 
 // ---- Local Imports ----
 // Note: The interfaces might need adjustment if they rely on Admin SDK types.
-import {Article, Author, Category, Tag} from "@src/interfaces/firestore.interface";
-import {ArticleSchema, AuthorSchema, CategorySchema, TagSchema} from "@src/schemas/storage/firestore.schema";
+import {
+  Article, Author, Category, Tag,
+} from "@src/interfaces/firestore.interface";
+import {
+  ArticleSchema, AuthorSchema, CategorySchema, TagSchema,
+} from "@src/schemas/storage/firestore.schema";
 
 // ---- Environment Variables ----
 const projectId = process.env.GCP_PROJECT_ID;
 
 // ---- Initialize Firebase App (Singleton) ----
 console.log("[Firestore] Initializing Firebase app...");
-const app: FirebaseApp = getApps().length ? getApp() : initializeApp({projectId});
+const app: FirebaseApp = getApps().length ?
+  getApp() :
+  initializeApp({projectId});
 
 // ---- Initialize Firestore ----
 console.log("[Firestore] Initializing Firestore client...");
@@ -36,7 +45,8 @@ if (process.env.USE_FIREBASE_EMULATOR === "true") {
 }
 
 // ---- Article Status Enum ----
-export type ArticleStatus = "scheduled" | "published" | "archived" | "in_review";
+export type ArticleStatus =
+  "scheduled" | "published" | "archived" | "in_review";
 
 // ---- Typed Collection Accessors ----
 export const collections = {
@@ -47,11 +57,7 @@ export const collections = {
 };
 
 // ---- Validation + CRUD Helpers ----
-
-/**
- * Validate data against the schema before writing to Firestore.
- */
-export async function validateAndWrite<T extends { [x: string]: any; }>( // Adjusted type for setDoc
+export async function validateAndWrite<T extends DocumentData>(
   collectionName: keyof typeof collections,
   data: T,
   schema: z.ZodSchema<T>,
@@ -60,7 +66,8 @@ export async function validateAndWrite<T extends { [x: string]: any; }>( // Adju
   console.log(`[Firestore] Validating and writing to ${collectionName}...`);
   const parsed = schema.safeParse(data);
   if (!parsed.success) {
-    console.error(`❌ Validation failed for ${collectionName}:`, parsed.error.format());
+    console.error(`❌ Validation failed for ${collectionName}:`,
+      parsed.error.format());
     throw new Error(`Validation error for ${collectionName}`);
   }
 
@@ -73,6 +80,8 @@ export async function validateAndWrite<T extends { [x: string]: any; }>( // Adju
 
 /**
  * Example typed accessors (optional)
+ * @return {Promise<Article[]>} A promise that resolves to an array of
+ * articles.
  */
 export async function getPublishedArticles(): Promise<Article[]> {
   console.log("[Firestore] Fetching published articles...");
@@ -82,20 +91,41 @@ export async function getPublishedArticles(): Promise<Article[]> {
   return snapshot.docs.map((d: QueryDocumentSnapshot) => d.data() as Article);
 }
 
+/**
+* @param {Category} data The category data.
+* @return {Promise<DocumentReference>} A promise that resolves to the document
+* reference.
+*/
 export async function createCategory(data: Category) {
   return validateAndWrite("categories", data, CategorySchema);
 }
 
+/**
+* @param {Tag} data The tag data.
+* @return {Promise<DocumentReference>} A promise that resolves to the document
+* reference.
+*/
 export async function createTag(data: Tag) {
   return validateAndWrite("tags", data, TagSchema);
 }
 
+/**
+* @param {Author} data The author data.
+* @return {Promise<DocumentReference>} A promise that resolves to the document
+* reference.
+*/
 export async function createAuthor(data: Author) {
   return validateAndWrite("authors", data, AuthorSchema);
 }
 
+/**
+* @param {Article} data The article data.
+* @return {Promise<DocumentReference>} A promise that resolves to the document
+* reference.
+*/
 export async function createArticle(data: Article) {
-  // Note: The Article interface's DocumentReference fields will need to point to
-  // the client SDK's DocumentReference type, not the admin one.
-  return validateAndWrite("articles", data, ArticleSchema as any);
+  // Note: The Article interface's DocumentReference fields will need to
+  // point to the client SDK's DocumentReference type, not the admin one.
+  return validateAndWrite("articles", data,
+    ArticleSchema as z.ZodSchema<Article>);
 }

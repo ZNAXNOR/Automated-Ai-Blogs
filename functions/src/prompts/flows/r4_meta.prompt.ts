@@ -1,11 +1,12 @@
 import {ai} from "../../clients/genkitInstance.client";
 import {z} from "zod";
-import {r4_meta_output} from "../../schemas/flows/r4_meta.schema";
+import {r4MetaOutput} from "../../schemas/flows/r4_meta.schema";
 
 export const metaPrompt = ai.definePrompt({
   name: "Round4_MetaPrompt",
-  description: "Generates SEO metadata, keywords, and image guidance from the draft text.",
-  model: "googleai/gemini-2.5-flash",
+  description: "Generates SEO metadata, keywords, and " +
+  "image guidance from the draft text.",
+  model: "googleai/gemini-1.5-flash",
   input: {
     schema: z.object({
       blogTitle: z.string(),
@@ -17,15 +18,15 @@ export const metaPrompt = ai.definePrompt({
     }),
   },
   output: {
-    schema: r4_meta_output,
+    schema: r4MetaOutput,
   },
   config: {
     temperature: 0.3,
   },
   system: `
-You are an SEO and content strategy expert specializing in metadata generation
-for long-form blogs. You optimize visibility, CTR, and reader retention while
-keeping authenticity intact.
+You are an SEO and content strategy expert specializing in metadata 
+generation for long-form blogs. You optimize visibility, CTR, and reader 
+retention while keeping authenticity intact.
   `,
   prompt: `
 - blogTitle: {{blogTitle}}
@@ -37,7 +38,8 @@ AVAILABLE TAGS: {{availableTags}}
 AVAILABLE CATEGORIES: {{availableCategories}}
 
 TASK:
-Analyze the blog draft and output a single JSON object matching this schema:
+Analyze the blog draft and output a single JSON object matching 
+this schema:
 
 {
   "title": "string (SEO-optimized, ≤60 chars)",
@@ -68,7 +70,8 @@ GUIDELINES:
 - Use concise, human-attractive SEO title and slug.
 - Derive keywords semantically from the draft.
 - Reading level reflects complexity and tone.
-- Image prompts should describe detailed visual scenes aligned with the topic.
+- Image prompts should describe detailed visual scenes aligned with 
+  the topic.
 - Output must be pure JSON, double-quoted, no markdown or comments.
   `,
 });

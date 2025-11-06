@@ -14,7 +14,7 @@ export const r5PolishInput = z.object({
 });
 
 const polishOutputCore = z.object({
-  polishedBlog: z.string(), // Final blog content (Markdown + hashtags + disclaimer)
+  polishedBlog: z.string(),
   readability: z.object({
     fkGrade: z.number().optional(),
   }),

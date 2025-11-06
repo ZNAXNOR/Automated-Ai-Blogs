@@ -16,11 +16,21 @@ export interface SearchOpts {
   timeoutMs?: number;
 }
 
+export type CseOptions = SearchOpts & { apiKey: string; cx: string };
+
+/**
+ * Searches with Google Custom Search Engine.
+ * @param {string} query The search query.
+ * @param {CseOptions} opts The search options.
+ * @return {Promise<SearchResult[]>} The search results.
+ */
 export async function searchCse(
   query: string,
-  opts: SearchOpts & { apiKey: string; cx: string }
+  opts: CseOptions
 ): Promise<SearchResult[]> {
-  const {num = 10, start = 1, language, siteSearch, timeoutMs = 10_000, apiKey, cx} = opts;
+  const {
+    num = 10, start = 1, language, siteSearch, timeoutMs = 10_000, apiKey, cx,
+  } = opts;
   const q = siteSearch ? `${query} site:${siteSearch}` : query;
   const resp = await axios.get("https://www.googleapis.com/customsearch/v1", {
     params: {
@@ -33,9 +43,18 @@ export async function searchCse(
     },
     timeout: timeoutMs,
   });
-  const data = resp.data;
+  const data = resp.data as {
+    items: {
+      title: string,
+      snippet: string,
+      htmlSnippet: string,
+      link: string,
+      displayLink: string
+    }[],
+    queries: { request: { startIndex: number }[] }
+  };
   if (!Array.isArray(data.items)) return [];
-  return data.items.map((item: any, idx: number) => ({
+  return data.items.map((item, idx: number) => ({
     title: item.title,
     snippet: item.snippet || item.htmlSnippet || "",
     url: item.link,

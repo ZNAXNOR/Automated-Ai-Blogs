@@ -1,7 +1,11 @@
 import {ai} from "../../clients/genkitInstance.client";
 import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
+import {r5PolishOutput} from "@src/schemas/flows/r5_polish.schema";
+import {z} from "zod";
 
-export const round5StorageStep = async (pipelineId: string, data: any) => {
+export const round5StorageStep = async (
+  pipelineId: string, data: z.infer<typeof r5PolishOutput>
+) => {
   return await ai.run("Round5_Storage", async () => {
     const args = {pipelineId, round: "r5", data};
     const {pipelineId: pId, round, data: roundData} = args;
@@ -18,7 +22,9 @@ export const round5StorageStep = async (pipelineId: string, data: any) => {
         finishedAt: new Date().toISOString(),
       };
     } catch (err) {
-      console.error("[r5_polish:Round5_Storage] persistRoundOutput failed:", err);
+      console.error("[r5_polish:Round5_Storage] persistRoundOutput failed:",
+        err
+      );
       return {
         ok: false,
         pipelineId: pId,

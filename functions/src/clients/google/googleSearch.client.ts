@@ -5,11 +5,21 @@ interface ClientOpts extends SearchOpts {
   useFallback?: boolean;
 }
 
+export type SerpApiOptions = SearchOpts & { apiKey: string };
+
+/**
+ * Searches with SerpApi.
+ * @param {string} query The search query.
+ * @param {SerpApiOptions} opts The search options.
+ * @return {Promise<SearchResult[]>} The search results.
+ */
 async function gsearchSerpApi(
   query: string,
-  opts: SearchOpts & { apiKey: string }
+  opts: SerpApiOptions
 ): Promise<SearchResult[]> {
-  const {num = 10, start = 1, language, siteSearch, timeoutMs = 10_000, apiKey} = opts;
+  const {
+    num = 10, start = 1, language, siteSearch, timeoutMs = 10_000, apiKey,
+  } = opts;
   const q = siteSearch ? `${query} site:${siteSearch}` : query;
   const resp = await axios.get("https://serpapi.com/search.json", {
     params: {
@@ -22,8 +32,10 @@ async function gsearchSerpApi(
     },
     timeout: timeoutMs,
   });
-  const data = resp.data;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const data = resp.data as { organic_results?: any[], organic?: any[] };
   const items = data.organic_results ?? data.organic ?? [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return items.map((it: any, idx: number) => ({
     title: it.title,
     snippet: it.snippet || it.snippet_highlighted || "",
@@ -33,9 +45,21 @@ async function gsearchSerpApi(
   }));
 }
 
+export type SearchClientOpts = ClientOpts & {
+  cseKey?: string;
+  cseCx?: string;
+  serpApiKey?: string;
+};
+
+/**
+ * Searches with Google Search, using either CSE or SerpApi.
+ * @param {string} query The search query.
+ * @param {SearchClientOpts} opts The search options.
+ * @return {Promise<SearchResult[]>} The search results.
+ */
 export async function search(
   query: string,
-  opts: ClientOpts & { cseKey?: string; cseCx?: string; serpApiKey?: string } = {}
+  opts: SearchClientOpts = {}
 ): Promise<SearchResult[]> {
   const {useFallback = true, ...rest} = opts;
 
@@ -60,5 +84,6 @@ export async function search(
     return await gsearchSerpApi(query, {...rest, apiKey: serpApiKey});
   }
 
-  throw new Error("No search provider configured. Ensure GOOGLE_CSE_API_KEY & GOOGLE_CSE_CX or SERPAPI_KEY is set in your environment.");
+  throw new Error("No search provider configured. " +
+    "Ensure GOOGLE_CSE_API_KEY & GOOGLE_CSE_CX or SERPAPI_KEY is set.");
 }

@@ -1,6 +1,6 @@
 import {ai} from "@src/clients/genkitInstance.client";
 import {z} from "zod";
-import {r3_draft_output} from "@src/schemas/flows/r3_draft.schema";
+import {r3DraftOutput} from "@src/schemas/flows/r3_draft.schema";
 
 export const draftPrompt = ai.definePrompt({
   name: "Round3_DraftPrompt",
@@ -23,14 +23,15 @@ export const draftPrompt = ai.definePrompt({
     }),
   },
   output: {
-    schema: r3_draft_output,
+    schema: r3DraftOutput,
   },
   config: {
     temperature: 0.0,
     maxOutputTokens: 4096,
   },
   prompt: `
-SYSTEM: You are a professional editor compiling multiple blog sections into a cohesive article.
+SYSTEM: You are a professional editor compiling multiple blog sections 
+into a cohesive article.
 
 INPUT:
 - title: {{title}}

@@ -1,11 +1,14 @@
 import {search} from "../clients/google/googleSearch.client";
 import {ai} from "../clients/genkitInstance.client";
-import {googleSearchInputSchema, googleSearchOutputSchema} from "../schemas/tools/googleSearch.schema";
+import {
+  googleSearchInputSchema,
+  googleSearchOutputSchema,
+} from "../schemas/tools/googleSearch.schema";
 
 export const googleSearchTool = ai.defineTool(
   {
     name: "Genkit_GoogleSearch",
-    description: "Search Google (via CSE / SerpApi) and return a list of results",
+    description: "Search Google and return a list of results",
     inputSchema: googleSearchInputSchema,
     outputSchema: googleSearchOutputSchema,
   },
@@ -18,7 +21,10 @@ export const googleSearchTool = ai.defineTool(
       cseCx: process.env.GOOGLE_CSE_CX,
       serpApiKey: process.env.SERPAPI_KEY,
     });
-    console.log(`[googleSearchTool] ✅ Success, found ${results.length} results for query: "${query}"`);
+    console.log(
+      `[googleSearchTool] ✅ Success, found ${results.length} results for 
+        query: "${query}"`
+    );
     return results;
   }
 );

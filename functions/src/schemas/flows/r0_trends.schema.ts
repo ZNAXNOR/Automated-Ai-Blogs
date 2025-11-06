@@ -19,11 +19,11 @@ export const trendTimelinePoint = z.object({
 });
 
 export const r0TrendsOutput = z.object({
-  baseTopic: z.string().optional(), // if single topic
-  aggregatedTopics: z.array(z.string()).optional(), // list of all processed topics
-  suggestions: z.array(trendSuggestion), // flattened + normalized aggregate
-  trendTimeline: z.array(trendTimelinePoint), // merged average timeline (optional)
-  results: z.array( // per-topic grouped output
+  baseTopic: z.string().optional(),
+  aggregatedTopics: z.array(z.string()).optional(),
+  suggestions: z.array(trendSuggestion),
+  trendTimeline: z.array(trendTimelinePoint),
+  results: z.array(
     z.object({
       topic: z.string(),
       suggestions: z.array(trendSuggestion),

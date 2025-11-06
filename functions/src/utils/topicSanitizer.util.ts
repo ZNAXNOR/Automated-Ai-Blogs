@@ -3,6 +3,10 @@
  * - Removes sentence-like, long, or descriptive topics.
  * - Splits multi-concept topics by common delimiters.
  * - Deduplicates and normalizes to lowercase.
+ * @param {string[]} topics The array of topic strings to sanitize.
+ * @param {number} [maxChars=100] The maximum character length for a topic.
+ * @param {number} [maxWords=25] The maximum word count for a topic.
+ * @return {string[]} An array of sanitized, unique, lowercase topic strings.
  */
 export function sanitizeTopics(
   topics: string[],
@@ -20,10 +24,12 @@ export function sanitizeTopics(
         t.length <= maxChars &&
         t.split(/\s+/).length <= maxWords &&
         !/[.?!]/.test(t) && // Exclude topics with sentence punctuation
-        !/\b(and|or|but|because)\b/i.test(t); // Exclude topics with common conjunctions
+        !/\b(and|or|but|because)\b/i.test(t); // Exclude common conjunctions
       return passes;
     });
-  console.log(`[sanitizeTopics] After initial filtering: ${filteredTopics.length} topics`);
+  console.log(
+    `[sanitizeTopics] After initial filtering: ${filteredTopics.length} topics`
+  );
 
   // 2. Split multi-concept topics
   const DELIMITERS = /,|;|\||\/| - /;
@@ -33,10 +39,14 @@ export function sanitizeTopics(
   console.log(`[sanitizeTopics] After splitting: ${splitTopics.length} topics`);
 
   // 3. Final length check and deduplication
-  const finalTopics = splitTopics.filter((t) => t.length > 0 && t.length <= maxChars);
+  const finalTopics = splitTopics.filter(
+    (t) => t.length > 0 && t.length <= maxChars
+  );
 
   // Deduplicate and lowercase
-  const uniqueTopics = Array.from(new Set(finalTopics.map((t) => t.toLowerCase())));
+  const uniqueTopics = Array.from(
+    new Set(finalTopics.map((t) => t.toLowerCase()))
+  );
   console.log(`[sanitizeTopics] Final unique topics: ${uniqueTopics.length}`);
 
   return uniqueTopics;

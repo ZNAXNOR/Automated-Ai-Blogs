@@ -1,18 +1,26 @@
 /**
- * @file Fetches, analyzes, and aggregates Google Trends data to identify high-potential topics.
+ * @file Fetches, analyzes, and aggregates Google Trends data to identify
+ * high-potential topics.
  * @author Omkar Dalvi
  *
  * This flow performs the first step in the content pipeline (Round 0) by:
  * 1. Fetching Google Trends suggestions for a given list of topics.
- * 2. Filtering out topics that have already been used, based on a Firestore collection.
- * 3. Storing new, high-potential topics back to Firestore for future reference.
- * 4. Aggregating and normalizing scores for all suggestions to create a ranked list.
- * 5. Persisting the final output to a storage bucket for subsequent pipeline steps.
+ * 2. Filtering out topics that have already been used, based on a
+ *    Firestore collection.
+ * 3. Storing new, high-potential topics back to Firestore for future
+ *    reference.
+ * 4. Aggregating and normalizing scores for all suggestions to create a
+ *    ranked list.
+ * 5. Persisting the final output to a storage bucket for subsequent
+ *    pipeline steps.
  */
 
 import {ai} from "../../clients/genkitInstance.client";
 import {defineSecret} from "firebase-functions/params";
-import {r0TrendsInput, r0TrendsOutput} from "../../schemas/flows/r0_trends.schema";
+import {
+  r0TrendsInput,
+  r0TrendsOutput,
+} from "../../schemas/flows/r0_trends.schema";
 import {fetchGoogleTrends} from "../../clients/google/googleTrends.client";
 import {normalizeTopicList} from "../../utils/normalize.util";
 import {sanitizeTopics} from "../../utils/topicSanitizer.util";
@@ -28,26 +36,37 @@ const SERPAPI_KEY = defineSecret("SERPAPI_KEY");
 console.log("[r0Trends] Flow module loaded");
 
 type Suggestion = { topic: string; score: number };
+type TrendResult = {
+  topic: string,
+  suggestions: Suggestion[],
+  trendTimeline: { time: Date; value: number }[],
+}
 
 /**
- * Retrieves a set of topic strings that have already been processed from Firestore.
- * This prevents the pipeline from generating content on the same topic repeatedly.
- * @return A promise that resolves to a Set of lowercase topic strings.
+ * Retrieves a set of topic strings that have already been processed from
+ * Firestore.
+ * This prevents the pipeline from generating content on the same topic
+ * repeatedly.
+ * @return {Promise<Set<string>>} A promise that resolves to a Set of
+ *   lowercase topic strings.
  */
 async function getUsedTopics(): Promise<Set<string>> {
   const usedTopicsCollection = collection(db, "usedTopics");
   const snapshot = await getDocs(usedTopicsCollection);
   const topics = new Set<string>();
   snapshot.forEach((doc) => topics.add(doc.id.toLowerCase()));
-  console.log(`[r0Trends] Fetched ${topics.size} used topics from Firestore.`);
+  console.log(
+    `[r0Trends] Fetched ${topics.size} used topics from Firestore.`
+  );
   return topics;
 }
 
 /**
- * Stores a list of new, unused topic suggestions in Firestore, organized by category and date.
+ * Stores a list of new, unused topic suggestions in Firestore, organized by
+ * category and date.
  * This builds a historical record of potential topics.
- * @param category The parent topic or category for the suggestions.
- * @param topics The array of new suggestions to store.
+ * @param {string} category The parent topic or category for the suggestions.
+ * @param {Suggestion[]} topics The array of new suggestions to store.
  */
 async function storeNewTopics(category: string, topics: Suggestion[]) {
   if (topics.length === 0) {
@@ -62,11 +81,15 @@ async function storeNewTopics(category: string, topics: Suggestion[]) {
   const sortedTopics = [...topics].sort((a, b) => b.score - a.score);
 
   await setDoc(docRef, {topics: sortedTopics}, {merge: true});
-  console.log(`[r0Trends] Stored ${sortedTopics.length} new topics for category "${category}".`);
+  console.log(
+    `[r0Trends] Stored ${sortedTopics.length} new topics for category ` +
+    `"${category}".`
+  );
 }
 
 /**
- * The main flow for Round 0, responsible for trend analysis and topic discovery.
+ * The main flow for Round 0, responsible for trend analysis and
+ * topic discovery.
  */
 export const r0Trends = ai.defineFlow(
   {
@@ -75,8 +98,11 @@ export const r0Trends = ai.defineFlow(
     outputSchema: r0TrendsOutput,
   },
   async (input) => {
-    console.log("[r0Trends] Starting flow with input:", input);
-    const pipelineId = (input as any).pipelineId;
+    const flowInput = input as z.infer<typeof r0TrendsInput> & {
+      pipelineId: string,
+    };
+    console.log("[r0Trends] Starting flow with input:", flowInput);
+    const pipelineId = flowInput.pipelineId;
     if (!pipelineId) {
       throw new Error("[r0Trends] A pipelineId must be provided.");
     }
@@ -87,30 +113,42 @@ export const r0Trends = ai.defineFlow(
     if (!apiKey) throw new Error("[r0Trends] SERPAPI_KEY is not configured.");
 
     // Determine the list of seed topics to analyze.
-    const seedTopics = input.topic && input.topic.length > 0 ? input.topic : BLOG_TOPICS;
-    const geo = input.geo ?? "IN";
-    const timeframe = (input as any).timeframe ?? "today 12-m";
+    const seedTopics =
+      flowInput.topic && flowInput.topic.length > 0 ?
+        flowInput.topic :
+        BLOG_TOPICS;
+    const geo = flowInput.geo ?? "IN";
+    const timeframe = flowInput.timeframe ?? "today 12-m";
 
     const allSuggestions: Suggestion[] = [];
     const allTimelinePoints: { time: Date; value: number }[] = [];
-    const results: any[] = [];
+    const results: TrendResult[] = [];
 
     // Iterate through each seed topic to fetch and process its trend data.
     for (const topic of Array.isArray(seedTopics) ? seedTopics : [seedTopics]) {
       try {
         console.log(`[r0Trends] Fetching trends for topic: "${topic}"`);
-        const trendData = await fetchGoogleTrends({topic, geo, apiKey, timeframe});
+        const trendData = await fetchGoogleTrends({
+          topic, geo, apiKey, timeframe,
+        });
 
         // Filter for high-scoring and new (unused) suggestions.
-        const highScoringSuggestions = trendData.suggestions.filter((s: Suggestion) => s.score >= 100);
-        const sanitizedTopics = sanitizeTopics(highScoringSuggestions.map((s: Suggestion) => s.topic));
+        const highScoringSuggestions =
+          trendData.suggestions.filter((s: Suggestion) => s.score >= 100);
+        const sanitizedTopics =
+          sanitizeTopics(
+            highScoringSuggestions.map((s: Suggestion) => s.topic)
+          );
 
         const newSuggestions = sanitizedTopics
           .map((topicStr) => ({
             topic: topicStr,
-            score: highScoringSuggestions.find((s: Suggestion) => s.topic.toLowerCase() === topicStr.toLowerCase())?.score ?? 0,
+            score: highScoringSuggestions.find(
+              (s: Suggestion) =>
+                s.topic.toLowerCase() === topicStr.toLowerCase()
+            )?.score ?? 0,
           }))
-          .filter((s: Suggestion) => !usedTopics.has(s.topic.toLowerCase()));
+          .filter((s) => !usedTopics.has(s.topic.toLowerCase()));
 
         // Store the newly discovered topics for future reference.
         await storeNewTopics(topic, newSuggestions);
@@ -124,7 +162,10 @@ export const r0Trends = ai.defineFlow(
         allSuggestions.push(...newSuggestions);
         allTimelinePoints.push(...trendData.trendTimeline);
       } catch (err) {
-        console.error(`[r0Trends] Failed to fetch or process topic "${topic}":`, err);
+        console.error(
+          `[r0Trends] Failed to fetch or process topic "${topic}":`,
+          err
+        );
       }
     }
 
@@ -139,10 +180,11 @@ export const r0Trends = ai.defineFlow(
     });
 
     // Average the scores for topics that appeared in multiple trend analyses.
-    const averagedSuggestions = Array.from(aggregatedMap.entries()).map(([topic, v]) => ({
-      topic,
-      score: Math.round(v.total / v.count),
-    }));
+    const averagedSuggestions = Array.from(aggregatedMap.entries())
+      .map(([topic, v]) => ({
+        topic,
+        score: Math.round(v.total / v.count),
+      }));
 
     // Normalize scores to a standard scale (e.g., 0-100).
     const normalizedSuggestions = normalizeTopicList(averagedSuggestions);
@@ -152,12 +194,16 @@ export const r0Trends = ai.defineFlow(
     allTimelinePoints.forEach((pt) => {
       const ts = new Date(pt.time).getTime();
       if (!timelineMap.has(ts)) timelineMap.set(ts, []);
-        timelineMap.get(ts)!.push(pt.value);
+      const values = timelineMap.get(ts);
+      if (values) {
+        values.push(pt.value);
+      }
     });
-    const mergedTimeline = Array.from(timelineMap.entries()).map(([ts, vals]) => ({
-      time: new Date(ts),
-      value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
-    }));
+    const mergedTimeline = Array.from(timelineMap.entries())
+      .map(([ts, vals]) => ({
+        time: new Date(ts),
+        value: Math.round(vals.reduce((a, b) => a + b, 0) / vals.length),
+      }));
 
     // Prepare the final output object.
     const output: z.infer<typeof r0TrendsOutput> = {
@@ -167,7 +213,10 @@ export const r0Trends = ai.defineFlow(
       results,
     };
 
-    console.log(`[r0Trends] Aggregated ${normalizedSuggestions.length} unique, normalized suggestions.`);
+    console.log(
+      `[r0Trends] Aggregated ${normalizedSuggestions.length} unique, ` +
+      "normalized suggestions."
+    );
 
     // Persist the output of this round to storage for subsequent flows.
     const storageResult = await round0StorageStep(pipelineId, output);

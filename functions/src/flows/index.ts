@@ -1,6 +1,7 @@
 /**
- * @file Aggregates all flow definitions for Firebase Cloud Functions deployment.
- * This file wraps each flow in `onCallGenkit` and exports them as individual functions.
+ * @file Aggregates all flow definitions for Firebase Cloud Functions
+ * deployment. * This file wraps each flow in `onCallGenkit` and exports
+ * them as individual functions.
  */
 
 import {onCallGenkit} from "firebase-functions/v2/https";

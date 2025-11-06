@@ -1,3 +1,9 @@
+/**
+ * Normalizes a topic string by converting it to lowercase, trimming whitespace,
+ * removing punctuation, and collapsing multiple spaces into a single space.
+ * @param {string} str The input string to normalize.
+ * @return {string} The normalized string.
+ */
 export function normalizeTopic(str: string): string {
   return str
     .toLowerCase()

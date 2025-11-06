@@ -12,7 +12,8 @@ import axios, {AxiosInstance} from "axios";
  * - WP_USERNAME
  * - WP_PASSWORD
  *
- * NOTE: Does not upload media. featuredImage in meta is a prompt descriptor, not an upload.
+ * NOTE: Does not upload media. `featuredImage` in meta is a prompt
+ * descriptor, not an upload.
  */
 
 const WP_API_URL = process.env.WP_API_URL;
@@ -26,15 +27,15 @@ if (!WP_USERNAME || !WP_PASSWORD) {
   throw new Error("Missing WP credentials: WP_USERNAME and/or WP_PASSWORD");
 }
 
-function makeAuthHeader(username: string, password: string) {
+/**
+ * Creates a basic auth header.
+ * @param {string} username The WordPress username.
+ * @param {string} password The WordPress password.
+ * @return {string} The basic auth header.
+ */
+function makeAuthHeader(username: string, password: string): string {
   const token = Buffer.from(`${username}:${password}`).toString("base64");
   return `Basic ${token}`;
-}
-
-function maskSecret(secret: string) {
-  if (!secret) return "";
-  if (secret.length <= 4) return "*".repeat(secret.length);
-  return `${secret.slice(0, 2)}${"*".repeat(secret.length - 4)}${secret.slice(-2)}`;
 }
 
 const instance: AxiosInstance = axios.create({
@@ -46,10 +47,35 @@ const instance: AxiosInstance = axios.create({
   },
 });
 
+interface WPCategory {
+  id: number;
+  name: string;
+}
+
+interface WPTag {
+  id: number;
+  name: string;
+}
+
+interface WPPost {
+  id: number;
+  title: { rendered: string };
+  content: { rendered: string };
+  excerpt: { rendered: string };
+  slug: string;
+  status: string;
+  date: string;
+  link: string;
+}
+
 /**
  * createPost - POST /wp-json/wp/v2/posts
+ * @param {Record<string, unknown>} payload The post payload.
+ * @return {Promise<WPPost>} The created post data.
  */
-export async function createPost(payload: Record<string, any>) {
+export async function createPost(
+  payload: Record<string, unknown>
+): Promise<WPPost> {
   console.debug("[wordpress.client] createPost payload summary:", {
     title: payload.title,
     status: payload.status,
@@ -63,6 +89,8 @@ export async function createPost(payload: Record<string, any>) {
 /**
  * ensureCategory - find category by exact name (search) and return its ID.
  * If not found, create it.
+ * @param {string} name The category name.
+ * @return {Promise<number>} The category ID.
  */
 export async function ensureCategory(name: string): Promise<number> {
   if (!name) throw new Error("Category name required");
@@ -70,12 +98,12 @@ export async function ensureCategory(name: string): Promise<number> {
   const searchResp = await instance.get("/wp-json/wp/v2/categories", {
     params: {search: name, per_page: 10},
   });
-  const candidates = searchResp.data as Array<any>;
+  const candidates = searchResp.data as WPCategory[];
   // prefer exact (case-insensitive) match
   const exact = candidates.find(
-    (c) => typeof c.name === "string" && c.name.toLowerCase() === name.toLowerCase()
+    (c) => c.name.toLowerCase() === name.toLowerCase()
   );
-  if (exact && exact.id) return exact.id;
+  if (exact?.id) return exact.id;
 
   // Not found -> create
   const createResp = await instance.post("/wp-json/wp/v2/categories", {name});
@@ -84,17 +112,19 @@ export async function ensureCategory(name: string): Promise<number> {
 
 /**
  * ensureTag - find tag by name, return ID, create if missing
+ * @param {string} name The tag name.
+ * @return {Promise<number>} The tag ID.
  */
 export async function ensureTag(name: string): Promise<number> {
   if (!name) throw new Error("Tag name required");
   const searchResp = await instance.get("/wp-json/wp/v2/tags", {
     params: {search: name, per_page: 10},
   });
-  const candidates = searchResp.data as Array<any>;
+  const candidates = searchResp.data as WPTag[];
   const exact = candidates.find(
-    (t) => typeof t.name === "string" && t.name.toLowerCase() === name.toLowerCase()
+    (t) => t.name.toLowerCase() === name.toLowerCase()
   );
-  if (exact && exact.id) return exact.id;
+  if (exact?.id) return exact.id;
 
   const createResp = await instance.post("/wp-json/wp/v2/tags", {name});
   return createResp.data.id;

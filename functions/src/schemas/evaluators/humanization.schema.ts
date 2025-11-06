@@ -16,6 +16,8 @@ export type HumanizationResult = z.infer<typeof HumanizationResultSchema>;
 
 /**
  * The optional LLM hook shape:
- * async (systemPrompt: string, prompt: string) => { score?: number, reasoning?: string, raw?: any }
+ * async (systemPrompt: string, prompt: string) =>
+ * { score?: number, reasoning?: string, raw?: any }
  */
-export type LLMGenerateHook = (systemPrompt: string, prompt: string) => Promise<any>;
+export type LLMGenerateHook = (systemPrompt: string, prompt: string)
+                            => Promise<any>;

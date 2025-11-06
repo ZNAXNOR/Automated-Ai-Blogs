@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {r4MetaOutput, imagePromptSchema} from "./r4_meta.schema";
+import {r4MetaOutput} from "./r4_meta.schema";
 import {r5PolishOutput} from "./r5_polish.schema";
 
 /**
@@ -36,7 +36,6 @@ export const r8PublishOutput = z.object({
   date: z.string().optional(),
   slug: z.string().optional(),
   title: z.string().optional(),
-  // captured WP raw response (useful for debugging). Avoid printing it in prod logs.
   rawResponse: z.any().optional(),
   message: z.string().optional(),
 });

@@ -66,10 +66,10 @@ export interface Article extends BaseDoc {
 }
 
 // ---- Type Guards ----
-export function isArticle(doc: any): doc is Article {
+export function isArticle(doc: unknown): doc is Article {
   return (
-    typeof doc?.title === "string" &&
-    typeof doc?.slug === "string" &&
-    typeof doc?.status === "string"
+    typeof (doc as Article)?.title === "string" &&
+    typeof (doc as Article)?.slug === "string" &&
+    typeof (doc as Article)?.status === "string"
   );
 }

@@ -27,12 +27,18 @@ if (isEmulator) {
   storageConfig.apiEndpoint = "http://localhost:9199";
   process.env.GOOGLE_CLOUD_DISABLE_CERT_VALIDATION = "true";
 } else {
-  if (!serviceAccountPath) throw new Error("Missing GCP_SERVICE_ACCOUNT_JSON environment variable");
-  if (!fs.existsSync(serviceAccountPath)) throw new Error(`Missing service account file: ${serviceAccountPath}`);
+  if (!serviceAccountPath) {
+    throw new Error("Missing GCP_SERVICE_ACCOUNT_JSON environment variable");
+  }
+  if (!fs.existsSync(serviceAccountPath)) {
+    throw new Error(`Missing service account file: ${serviceAccountPath}`);
+  }
   storageConfig.keyFilename = serviceAccountPath;
 }
 
-if (!bucketName) throw new Error("Missing GCS_BUCKET_NAME environment variable");
+if (!bucketName) {
+  throw new Error("Missing GCS_BUCKET_NAME environment variable");
+}
 
 const storage = new Storage(storageConfig);
 export const bucket = storage.bucket(bucketName);
@@ -42,13 +48,20 @@ export const bucket = storage.bucket(bucketName);
  * - Automatically compresses with gzip.
  * - Optionally makes the file public.
  * - Returns structured GCSUploadResult metadata.
+ * @param {string} localPath The local path to the file.
+ * @param {string} destination The destination path in GCS.
+ * @param {boolean} makePublic Whether to make the file public.
+ * @return {Promise<GCSUploadResult>} A promise that resolves to
+ * the upload result.
  */
 export async function uploadFile(
   localPath: string,
   destination: string,
   makePublic = true
 ): Promise<GCSUploadResult> {
-  console.log(`[GCS] Uploading ${localPath} to gs://${bucket.name}/${destination}...`);
+  console.log(
+    `[GCS] Uploading ${localPath} to gs://${bucket.name}/${destination}...`
+  );
   await bucket.upload(localPath, {
     destination,
     gzip: true,
@@ -64,7 +77,8 @@ export async function uploadFile(
   }
 
   const [metadata] = await file.getMetadata();
-  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${destination}`;
+  const publicUrl =
+    `https://storage.googleapis.com/${bucket.name}/${destination}`;
 
   console.log(`[GCS] Upload successful: ${publicUrl}`);
 
@@ -80,6 +94,8 @@ export async function uploadFile(
 /**
  * Deletes a file from GCS.
  * Ignores missing files by default.
+ * @param {string} destination The destination path in GCS.
+ * @return {Promise<void>} A promise that resolves when the file is deleted.
  */
 export async function deleteFile(destination: string): Promise<void> {
   console.log(`[GCS] Deleting gs://${bucket.name}/${destination}...`);
@@ -89,6 +105,12 @@ export async function deleteFile(destination: string): Promise<void> {
 /**
  * Uploads a pipeline round artifact to its canonical GCS path.
  * Validates the metadata using GCSArtifactSchema.
+ * @param {string} pipelineId The pipeline ID.
+ * @param {string} round The round.
+ * @param {string} localFilePath The local file path.
+ * @param {string} [description] The description.
+ * @return {Promise<void>} A promise that resolves when the artifact
+ * is uploaded.
  */
 export async function uploadArtifact(
   pipelineId: string,
@@ -96,8 +118,11 @@ export async function uploadArtifact(
   localFilePath: string,
   description?: string
 ): Promise<void> {
-  console.log(`[GCS] Uploading artifact for pipeline ${pipelineId}, round ${round}...`);
-  const destination = makeGCSPath(pipelineId, round, "json").replace(`gs://${bucket.name}/`, "");
+  console.log(
+    `[GCS] Uploading artifact for pipeline ${pipelineId}, round ${round}...`
+  );
+  const destination = makeGCSPath(
+    pipelineId, round, "json").replace(`gs://${bucket.name}/`, "");
   const result = await uploadFile(localFilePath, destination, true);
 
   // Construct metadata and validate
@@ -113,11 +138,14 @@ export async function uploadArtifact(
 
   const parsed = GCSArtifactSchema.safeParse(artifact);
   if (!parsed.success) {
-    console.error("Invalid GCS artifact metadata:", parsed.error.format());
+    console.error(
+      "Invalid GCS artifact metadata:", parsed.error.format());
     throw new Error("Invalid GCS artifact metadata");
   }
 
-  console.log(`[GCS Upload] ✅ Uploaded ${pipelineId}_${round} → ${result.publicUrl}`);
+  console.log(
+    `[GCS Upload] ✅ Uploaded ${pipelineId}_${round} → ${result.publicUrl}`
+  );
 }
 
 /**
@@ -125,6 +153,7 @@ export async function uploadArtifact(
  *
  * import { uploadArtifact, deleteFile } from './gcs.client';
  *
- * await uploadArtifact('abc12345', 'r4', './tmp/meta.json', 'Metadata output for round 4');
+ * await uploadArtifact(
+ *  'abc12345', 'r4', './tmp/meta.json', 'Metadata output for round 4');
  * await deleteFile('meta/abc12345_r4.json');
  */

@@ -12,10 +12,17 @@ interface PersistResult {
   message: string;
 }
 
+/**
+ * Persists the output of a round to GCS and Firestore.
+ * @param {string} pipelineId - The ID of the pipeline.
+ * @param {string} round - The round number.
+ * @param {Record<string, unknown>} data - The data to persist.
+ * @return {Promise<PersistResult>} - The result of the persistence operation.
+ */
 export async function persistRoundOutput(
   pipelineId: string,
   round: string,
-  data: any
+  data: Record<string, unknown>
 ): Promise<PersistResult> {
   const gcsPath = makeGCSPath(pipelineId, round);
   const gcsStoragePath = `gs://${bucket.name}/pipelines/${pipelineId}`;
@@ -32,15 +39,21 @@ export async function persistRoundOutput(
   const pipelineRef = doc(db, "pipelines", pipelineId);
   firestorePaths.push(pipelineRef.path);
 
-  const pipelineUpdateData: { [key: string]: any } = {
+  const pipelineUpdateData: {[key: string]: unknown} = {
     pipelineId,
     updatedAt: createdAt,
     gcsStoragePath,
   };
 
   switch (round) {
-  case "r1":
-    const topicRef = doc(db, "usedTopics", data.topic.toLowerCase(), "details", pipelineId);
+  case "r1": {
+    const topicRef = doc(
+      db,
+      "usedTopics",
+      (data.topic as string).toLowerCase(),
+      "details",
+      pipelineId
+    );
     const topicData = {
       pipelineId,
       title: data.topic || data.title || "Untitled Topic",
@@ -52,14 +65,14 @@ export async function persistRoundOutput(
     pipelineUpdateData.topicRef = topicRef;
     pipelineUpdateData.title = topicData.title;
     break;
-
+  }
   case "r2": {
     const metaRef = doc(db, "metadata", pipelineId);
     const roundMetadata = {
       researchNotes: data.researchNotes,
     };
-    if (data.outline?.title) {
-      pipelineUpdateData.title = data.outline.title;
+    if ((data.outline as {title: string})?.title) {
+      pipelineUpdateData.title = (data.outline as {title: string}).title;
     }
     const dataToSet = {pipelineId, ...roundMetadata, updatedAt: createdAt};
     const sanitizedData = JSON.parse(JSON.stringify(dataToSet));
@@ -68,28 +81,22 @@ export async function persistRoundOutput(
     pipelineUpdateData.metadataRef = metaRef;
     break;
   }
-
   case "r4":
   case "r5": {
     const metaRef = doc(db, "metadata", pipelineId);
 
-    // Destructure image-related fields and keep the rest
     const {
       featuredImage,
       usedImages,
-      polishedBlog,
       ...restOfData
     } = data;
 
-    // Prepare the data for setting in Firestore
-    const updatePayload: { [key: string]: any } = {
+    const updatePayload: {[key: string]: unknown} = {
       pipelineId,
-      ...restOfData, // Spread the non-image fields
+      ...restOfData,
       updatedAt: createdAt,
     };
 
-    // Use dot notation to update nested fields within the 'images' map.
-    // This ensures we can add/update image fields without overwriting the whole map.
     if (featuredImage) {
       updatePayload["images.featured"] = featuredImage;
     }
@@ -104,17 +111,18 @@ export async function persistRoundOutput(
     pipelineUpdateData.metadataRef = metaRef;
     break;
   }
-
   case "r8": {
     const metaRef = doc(db, "metadata", pipelineId);
     const roundMetadata = {
-      wordpressLink: data.output?.link,
-      status: data.output?.status || "published",
+      wordpressLink: (data.output as {link: string})?.link,
+      status: (data.output as {status: string})?.status || "published",
     };
 
-    pipelineUpdateData.title = data.input?.meta?.title;
-    pipelineUpdateData.status = data.output?.status || "published";
-    pipelineUpdateData.wordpressLink = data.output?.link;
+    pipelineUpdateData.title = (data.input as {meta: {title: string}})?.meta
+      ?.title;
+    pipelineUpdateData.status =
+        (data.output as {status: string})?.status || "published";
+    pipelineUpdateData.wordpressLink = (data.output as {link: string})?.link;
 
     const dataToSet = {pipelineId, ...roundMetadata, updatedAt: createdAt};
     const sanitizedData = JSON.parse(JSON.stringify(dataToSet));
@@ -126,7 +134,11 @@ export async function persistRoundOutput(
   }
   }
 
-  batch.set(pipelineRef, JSON.parse(JSON.stringify(pipelineUpdateData)), {merge: true});
+  batch.set(
+    pipelineRef,
+    JSON.parse(JSON.stringify(pipelineUpdateData)),
+    {merge: true}
+  );
   await batch.commit();
 
   return {
@@ -135,10 +147,16 @@ export async function persistRoundOutput(
     gcsPath,
     publicUrl,
     firestorePaths,
-    message: `Round ${round} persisted. Firestore documents updated: ${firestorePaths.join(", ")}`.trim(),
+    message: `Round ${round} persisted. ` +
+      `Firestore docs updated: ${firestorePaths.join(", ")}`.trim(),
   };
 }
 
+/**
+ * Gets the summary of a pipeline from Firestore.
+ * @param {string} pipelineId - The ID of the pipeline.
+ * @return {Promise<any>} - The pipeline summary data.
+ */
 export async function getPipelineSummary(pipelineId: string) {
   const docRef = doc(db, "pipelines", pipelineId);
   const docSnap = await getDoc(docRef);
@@ -146,6 +164,13 @@ export async function getPipelineSummary(pipelineId: string) {
   return docSnap.data();
 }
 
+/**
+ * Verifies if a blob for a given round exists in GCS.
+ * @param {string} pipelineId - The ID of the pipeline.
+ * @param {string} round - The round number.
+ * @return {Promise<{exists: boolean, gcsPath: string}>} -
+ * An object with blob existence and GCS path.
+ */
 export async function verifyRoundBlob(pipelineId: string, round: string) {
   const gcsPath = makeGCSPath(pipelineId, round);
   const file = bucket.file(gcsPath.replace(`gs://${bucket.name}/`, ""));

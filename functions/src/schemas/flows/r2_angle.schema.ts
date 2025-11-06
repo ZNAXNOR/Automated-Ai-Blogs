@@ -27,7 +27,8 @@ const angleOutputCore = z.object({
   }),
 });
 
-// The final output of the r2 flow must include the pipelineId for the next step.
+// The final output of the r2 flow must include the pipelineId for
+// the next step.
 export const r2AngleOutput = angleOutputCore.extend({
   pipelineId: z.string(),
 });
