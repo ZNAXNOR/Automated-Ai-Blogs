@@ -19,19 +19,19 @@
  * 7. Persists the publishing details to a storage bucket.
  */
 
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {
   r8PublishInput,
   r8PublishOutput,
   R8PublishInput,
   R8PublishOutput,
-} from "../../schemas/flows/r8_publish.schema";
+} from "../../schemas/flows/r8_publish.schema.js";
 import {
   ensureCategory,
   ensureTag,
   createPost,
-} from "../../clients/wordpress.client";
-import {round8StorageStep} from "./r8_storage.step";
+} from "../../clients/wordpress.client.js";
+import {round8StorageStep} from "./r8_storage.step.js";
 import {marked} from "marked";
 
 console.log("[r8Publish] Flow module loaded");

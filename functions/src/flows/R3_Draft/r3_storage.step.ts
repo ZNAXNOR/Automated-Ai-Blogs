@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
-import {r3DraftOutput} from "../../schemas/flows/r3_draft.schema";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
+import {r3DraftOutput} from "../../schemas/flows/r3_draft.schema.js";
 import {z} from "zod";
 
 export const round3StorageStep = async (

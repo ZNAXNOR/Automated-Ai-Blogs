@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
-import {R4MetaOutput} from "../../schemas/flows/r4_meta.schema";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
+import {R4MetaOutput} from "../../schemas/flows/r4_meta.schema.js";
 
 export const round4StorageStep = async (
   pipelineId: string,

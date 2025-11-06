@@ -21,16 +21,16 @@
  * 5. Persists the final metadata object to a storage bucket.
  */
 
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {
   r4MetaInput,
   r4MetaOutput,
   R4MetaOutput,
-} from "../../schemas/flows/r4_meta.schema";
-import {metaPrompt} from "../../prompts/flows/r4_meta.prompt";
-import {safeParseJsonFromAI} from "../../clients/aiParsing.client";
+} from "../../schemas/flows/r4_meta.schema.js";
+import {metaPrompt} from "../../prompts/flows/r4_meta.prompt.js";
+import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
 import fetch from "node-fetch";
-import {round4StorageStep} from "./r4_storage.step";
+import {round4StorageStep} from "./r4_storage.step.js";
 
 console.log("[r4Meta] Flow module loaded");
 

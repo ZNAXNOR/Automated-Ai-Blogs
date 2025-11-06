@@ -1,6 +1,6 @@
 import {z} from "zod";
-import {r4MetaOutput} from "./r4_meta.schema";
-import {r5PolishOutput} from "./r5_polish.schema";
+import {r4MetaOutput} from "./r4_meta.schema.js";
+import {r5PolishOutput} from "./r5_polish.schema.js";
 
 /**
  * Input schema for r8Publish

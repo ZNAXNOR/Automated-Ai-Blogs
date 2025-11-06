@@ -1,5 +1,5 @@
-import {ai} from "@clients/genkitInstance.client";
-import {urlContextTool} from "@src/tools";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {urlContext} from "../../tools/index.js";
 import {z} from "zod";
 
 /**
@@ -16,7 +16,7 @@ export const urlContextPrompt = ai.definePrompt({
   description: "Fetches factual content summaries from a URL \
   for grounding later flows.",
   model: "googleai/gemini-2.0-flash",
-  tools: [urlContextTool],
+  tools: [urlContext],
 
   input: {
     schema: z.object({

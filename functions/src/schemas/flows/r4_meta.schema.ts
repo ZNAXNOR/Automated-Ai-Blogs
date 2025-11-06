@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {r3DraftOutput} from "./r3_draft.schema";
+import {r3DraftOutput} from "./r3_draft.schema.js";
 
 /**
  * r4_meta.schema.ts

@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {r0TrendsOutput} from "./r0_trends.schema";
+import {r0TrendsOutput} from "./r0_trends.schema.js";
 
 export const r1IdeateInput = r0TrendsOutput.extend({
   pipelineId: z.string(),

@@ -1,5 +1,5 @@
-import {collections} from "../clients/firebase/firestore.client";
-import {Article} from "../interfaces/firestore.interface";
+import {collections} from "../clients/firebase/firestore.client.js";
+import {Article} from "../interfaces/firestore.interface.js";
 import {Timestamp, doc, setDoc, query, where,
   getDocs, QueryDocumentSnapshot, DocumentData}
   from "firebase/firestore";

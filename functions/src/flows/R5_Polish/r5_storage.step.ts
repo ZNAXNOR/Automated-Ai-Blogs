@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
-import {r5PolishOutput} from "@src/schemas/flows/r5_polish.schema";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
+import {r5PolishOutput} from "@src/schemas/flows/r5_polish.schema.js";
 import {z} from "zod";
 
 export const round5StorageStep = async (

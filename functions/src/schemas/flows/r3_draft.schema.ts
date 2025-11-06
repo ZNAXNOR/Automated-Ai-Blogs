@@ -1,5 +1,5 @@
 import {z} from "zod";
-import {r2AngleOutput} from "./r2_angle.schema";
+import {r2AngleOutput} from "./r2_angle.schema.js";
 
 /**
  * r3_draft.schema.ts

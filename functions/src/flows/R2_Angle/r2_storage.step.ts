@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
-import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
+import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema.js";
 import {z} from "zod";
 
 export const round2StorageStep = async (

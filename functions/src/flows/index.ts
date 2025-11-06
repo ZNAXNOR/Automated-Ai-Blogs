@@ -9,14 +9,14 @@ import {onCallGenkit} from "firebase-functions/v2/https";
 import {defineSecret} from "firebase-functions/params";
 const googleAIapiKey = defineSecret("GEMINI_API_KEY");
 
-import {orchestrator} from "./orchestrator.flow";
-import {r0Trends} from "./R0_Trends/r0_trends.flow";
-import {r1Ideate} from "./R1_Ideate/r1_ideate.flow";
-import {r2Angle} from "./R2_Angle/r2_angle.flow";
-import {r3Draft} from "./R3_Draft/r3_draft.flow";
-import {r4Meta} from "./R4_Meta/r4_meta.flow";
-import {r5Polish} from "./R5_Polish/r5_polish.flow";
-import {r8Publish} from "./R8_Publish/r8_publish.flow";
+import {orchestrator} from "./orchestrator.flow.js";
+import {r0Trends} from "./R0_Trends/r0_trends.flow.js";
+import {r1Ideate} from "./R1_Ideate/r1_ideate.flow.js";
+import {r2Angle} from "./R2_Angle/r2_angle.flow.js";
+import {r3Draft} from "./R3_Draft/r3_draft.flow.js";
+import {r4Meta} from "./R4_Meta/r4_meta.flow.js";
+import {r5Polish} from "./R5_Polish/r5_polish.flow.js";
+import {r8Publish} from "./R8_Publish/r8_publish.flow.js";
 
 // Define a common options object for onCallGenkit
 const onCallGenkitOptions = {

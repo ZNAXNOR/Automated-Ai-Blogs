@@ -6,7 +6,7 @@
  */
 
 import {Timestamp, DocumentReference} from "firebase-admin/firestore";
-import type {ArticleStatus} from "../clients/firebase/firestore.client";
+import type {ArticleStatus} from "../clients/firebase/firestore.client.js";
 
 // ---- Common Reusable Types ----
 export interface BaseDoc {

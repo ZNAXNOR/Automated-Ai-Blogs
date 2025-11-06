@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {z} from "zod";
-import {r1IdeatePromptOutput} from "../../schemas/flows/r1_ideate.schema";
+import {r1IdeatePromptOutput} from "../../schemas/flows/r1_ideate.schema.js";
 
 export const ideationPrompt = ai.definePrompt({
   name: "Round1_IdeationPrompt",

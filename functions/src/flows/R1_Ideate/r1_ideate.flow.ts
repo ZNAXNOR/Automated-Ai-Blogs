@@ -17,19 +17,19 @@
  */
 
 import {z} from "zod";
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {
   r1IdeateInput,
   r1IdeateOutput,
   referenceSchema,
-} from "../../schemas/flows/r1_ideate.schema";
-import {safeParseJsonFromAI} from "../../clients/aiParsing.client";
-import {fetchNewsForTopics} from "../../clients/google/googleNews.client";
-import {googleSearchTool} from "../../tools/googleSearch.tool";
-import {db} from "../../clients/firebase/firestore.client";
+} from "../../schemas/flows/r1_ideate.schema.js";
+import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
+import {fetchNewsForTopics} from "../../clients/google/googleNews.client.js";
+import {googleSearchTool} from "../../tools/googleSearch.tool.js";
+import {db} from "../../clients/firebase/firestore.client.js";
 import {doc, setDoc} from "firebase/firestore";
-import {round1StorageStep} from "./r1_storage.step";
-import {r0TrendsOutput} from "../../schemas/flows/r0_trends.schema";
+import {round1StorageStep} from "./r1_storage.step.js";
+import {r0TrendsOutput} from "../../schemas/flows/r0_trends.schema.js";
 
 console.log("[r1Ideate] Flow module loaded");
 

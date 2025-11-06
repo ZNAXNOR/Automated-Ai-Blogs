@@ -16,14 +16,14 @@
  */
 
 import {z} from "zod";
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {
   r2AngleInput,
   r2AngleOutput,
-} from "../../schemas/flows/r2_angle.schema";
-import {safeParseJsonFromAI} from "../../clients/aiParsing.client";
-import {urlContext, UrlContextToolResponse} from "../../tools/urlContext.tool";
-import {round2StorageStep} from "./r2_storage.step";
+} from "../../schemas/flows/r2_angle.schema.js";
+import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
+import {urlContext, UrlContextToolResponse} from "../../tools/urlContext.tool.js";
+import {round2StorageStep} from "./r2_storage.step.js";
 
 console.log("[r2Angle] Flow module loaded");
 

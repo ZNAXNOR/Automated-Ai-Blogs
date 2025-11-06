@@ -19,16 +19,16 @@
  * 6. Persists the final polished blog content to a storage bucket.
  */
 
-import {ai} from "../../clients/genkitInstance.client";
-import {polishPrompt} from "../../prompts/flows/r5_polish.prompt";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {polishPrompt} from "../../prompts/flows/r5_polish.prompt.js";
 import {
   r5PolishInput,
   r5PolishOutput,
-} from "../../schemas/flows/r5_polish.schema";
-import {safeParseJsonFromAI} from "../../clients/aiParsing.client";
+} from "../../schemas/flows/r5_polish.schema.js";
+import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
 import {z} from "zod";
-import {round5StorageStep} from "./r5_storage.step";
-import {R3SectionOutput} from "@src/schemas/flows/r3_draft.schema";
+import {round5StorageStep} from "./r5_storage.step.js";
+import {R3SectionOutput} from "@src/schemas/flows/r3_draft.schema.js";
 
 console.log("[r5Polish] Flow module loaded");
 

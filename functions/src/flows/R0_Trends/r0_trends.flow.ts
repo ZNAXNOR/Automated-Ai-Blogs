@@ -15,20 +15,20 @@
  *    pipeline steps.
  */
 
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {defineSecret} from "firebase-functions/params";
 import {
   r0TrendsInput,
   r0TrendsOutput,
-} from "../../schemas/flows/r0_trends.schema";
-import {fetchGoogleTrends} from "../../clients/google/googleTrends.client";
-import {normalizeTopicList} from "../../utils/normalize.util";
-import {sanitizeTopics} from "../../utils/topicSanitizer.util";
-import {BLOG_TOPICS} from "../../clients/blogTopic.client";
-import {db} from "../../clients/firebase/firestore.client";
+} from "../../schemas/flows/r0_trends.schema.js";
+import {fetchGoogleTrends} from "../../clients/google/googleTrends.client.js";
+import {normalizeTopicList} from "../../utils/normalize.util.js";
+import {sanitizeTopics} from "../../utils/topicSanitizer.util.js";
+import {BLOG_TOPICS} from "../../clients/blogTopic.client.js";
+import {db} from "../../clients/firebase/firestore.client.js";
 import {collection, doc, getDocs, setDoc} from "firebase/firestore";
 import {z} from "zod";
-import {round0StorageStep} from "./r0_storage.step";
+import {round0StorageStep} from "./r0_storage.step.js";
 
 // Define the SERPAPI_KEY as a secret to be accessed securely at runtime.
 const SERPAPI_KEY = defineSecret("SERPAPI_KEY");
@@ -134,17 +134,17 @@ export const r0Trends = ai.defineFlow(
 
         // Filter for high-scoring and new (unused) suggestions.
         const highScoringSuggestions =
-          trendData.suggestions.filter((s: Suggestion) => s.score >= 100);
+          trendData.suggestions.filter((s) => s.score >= 100);
         const sanitizedTopics =
           sanitizeTopics(
-            highScoringSuggestions.map((s: Suggestion) => s.topic)
+            highScoringSuggestions.map((s) => s.topic)
           );
 
         const newSuggestions = sanitizedTopics
           .map((topicStr) => ({
             topic: topicStr,
             score: highScoringSuggestions.find(
-              (s: Suggestion) =>
+              (s) =>
                 s.topic.toLowerCase() === topicStr.toLowerCase()
             )?.score ?? 0,
           }))

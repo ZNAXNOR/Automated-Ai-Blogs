@@ -1,6 +1,6 @@
-import {ai} from "@src/clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {z} from "zod";
-import {r5PolishOutput} from "@src/schemas/flows/r5_polish.schema";
+import {r5PolishOutput} from "../../schemas/flows/r5_polish.schema.js";
 
 /**
  * r5_polish_prompt.ts

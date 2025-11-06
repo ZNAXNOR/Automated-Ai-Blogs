@@ -13,23 +13,23 @@
  * to trace the entire lifecycle of a single run.
  */
 
-import {ai} from "../clients/genkitInstance.client";
+import {ai} from "../clients/genkitInstance.client.js";
 import {v4 as uuidv4} from "uuid";
 
 // --- Import all processing rounds ---
-import {r0Trends} from "./R0_Trends/r0_trends.flow";
-import {r1Ideate} from "./R1_Ideate/r1_ideate.flow";
-import {r2Angle} from "./R2_Angle/r2_angle.flow";
-import {r3Draft} from "./R3_Draft/r3_draft.flow";
-import {r4Meta} from "./R4_Meta/r4_meta.flow";
-import {r5Polish} from "./R5_Polish/r5_polish.flow";
-import {r8Publish} from "./R8_Publish/r8_publish.flow";
+import {r0Trends} from "./R0_Trends/r0_trends.flow.js";
+import {r1Ideate} from "./R1_Ideate/r1_ideate.flow.js";
+import {r2Angle} from "./R2_Angle/r2_angle.flow.js";
+import {r3Draft} from "./R3_Draft/r3_draft.flow.js";
+import {r4Meta} from "./R4_Meta/r4_meta.flow.js";
+import {r5Polish} from "./R5_Polish/r5_polish.flow.js";
+import {r8Publish} from "./R8_Publish/r8_publish.flow.js";
 
-import {BLOG_TOPICS} from "../clients/blogTopic.client";
+import {BLOG_TOPICS} from "../clients/blogTopic.client.js";
 import {
   orchestratorInput,
   orchestratorOutput,
-} from "../schemas/flows/orchestrator.schema";
+} from "../schemas/flows/orchestrator.schema.js";
 
 console.log("[Orchestrator] Loading orchestrator flow definition");
 

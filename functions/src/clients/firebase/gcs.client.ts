@@ -10,9 +10,9 @@ import fs from "fs";
 import path from "path";
 
 // ---- Local Imports ----
-import {GCSUploadResult} from "@src/interfaces/gcs.interface";
-import {makeGCSPath} from "@src/helpers/gcs.helper";
-import {GCSArtifactSchema} from "@src/schemas/storage/gcs.schema";
+import {GCSUploadResult} from "@src/interfaces/gcs.interface.js";
+import {makeGCSPath} from "@src/helpers/gcs.helper.js";
+import {GCSArtifactSchema} from "@src/schemas/storage/gcs.schema.js";
 
 // --- Environment Variables & Client Initialization ---
 const projectId = process.env.GCP_PROJECT_ID;

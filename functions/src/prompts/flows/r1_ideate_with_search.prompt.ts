@@ -1,7 +1,7 @@
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {z} from "zod";
-import {r1IdeatePromptOutput} from "../../schemas/flows/r1_ideate.schema";
-import {googleSearchTool} from "@src/tools";
+import {r1IdeatePromptOutput} from "../../schemas/flows/r1_ideate.schema.js";
+import {googleSearchTool} from "@src/tools/index.js";
 
 export const ideationPromptWithSearch = ai.definePrompt({
   name: "Round1_IdeationPrompt_With_Search",

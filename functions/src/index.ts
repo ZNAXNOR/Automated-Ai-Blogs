@@ -24,4 +24,4 @@ import {setGlobalOptions} from "firebase-functions/v2";
 // this will be the maximum concurrent request count.
 setGlobalOptions({maxInstances: 10});
 
-export * from "./flows";
+export * from "./flows/index.js";

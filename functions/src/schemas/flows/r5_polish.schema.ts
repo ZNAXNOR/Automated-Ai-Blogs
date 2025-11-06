@@ -1,6 +1,6 @@
 import {z} from "zod";
-import {r3DraftOutput} from "./r3_draft.schema";
-import {r4MetaOutput} from "./r4_meta.schema";
+import {r3DraftOutput} from "./r3_draft.schema.js";
+import {r4MetaOutput} from "./r4_meta.schema.js";
 
 /**
  * Input schema for r5Polish

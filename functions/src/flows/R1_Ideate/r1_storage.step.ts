@@ -1,7 +1,7 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
 import {r1IdeateInput, r1IdeateOutput}
-  from "../../schemas/flows/r1_ideate.schema";
+  from "../../schemas/flows/r1_ideate.schema.js";
 import {z} from "zod";
 
 export const round1StorageStep = async (

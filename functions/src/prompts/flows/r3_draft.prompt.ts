@@ -1,6 +1,6 @@
-import {ai} from "@src/clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {z} from "zod";
-import {r3DraftOutput} from "@src/schemas/flows/r3_draft.schema";
+import {r3DraftOutput} from "../../schemas/flows/r3_draft.schema.js";
 
 export const draftPrompt = ai.definePrompt({
   name: "Round3_DraftPrompt",

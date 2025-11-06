@@ -1,10 +1,10 @@
 import {z} from "zod";
-import {fetchUrlContext} from "../clients/urlFetcher.client";
-import {ai} from "../clients/genkitInstance.client";
+import {fetchUrlContext} from "../clients/urlFetcher.client.js";
+import {ai} from "../clients/genkitInstance.client.js";
 import {
   urlContextInputSchema,
   urlContextOutputSchema,
-} from "../schemas/tools/urlContext.schema";
+} from "../schemas/tools/urlContext.schema.js";
 
 export const urlContext = ai.defineTool(
   {

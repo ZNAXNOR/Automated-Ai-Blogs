@@ -19,18 +19,18 @@
  */
 
 import {z} from "zod";
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {
   r3DraftInput,
   r3DraftOutput,
   R3SectionInput,
   R3SectionOutput,
-} from "../../schemas/flows/r3_draft.schema";
-import {draftPrompt} from "../../prompts/flows/r3_draft.prompt";
-import {draftSectionPrompt} from "../../prompts/flows/r3_draft_section.prompt";
-import {safeParseJsonFromAI} from "../../clients/aiParsing.client";
-import {round3StorageStep} from "./r3_storage.step";
-import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema";
+} from "../../schemas/flows/r3_draft.schema.js";
+import {draftPrompt} from "../../prompts/flows/r3_draft.prompt.js";
+import {draftSectionPrompt} from "../../prompts/flows/r3_draft_section.prompt.js";
+import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
+import {round3StorageStep} from "./r3_storage.step.js";
+import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema.js";
 
 console.log("[r3Draft] Flow module loaded");
 

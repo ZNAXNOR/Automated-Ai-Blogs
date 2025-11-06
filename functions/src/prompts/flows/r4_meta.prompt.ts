@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client";
+import {ai} from "../../clients/genkitInstance.client.js";
 import {z} from "zod";
-import {r4MetaOutput} from "../../schemas/flows/r4_meta.schema";
+import {r4MetaOutput} from "../../schemas/flows/r4_meta.schema.js";
 
 export const metaPrompt = ai.definePrompt({
   name: "Round4_MetaPrompt",

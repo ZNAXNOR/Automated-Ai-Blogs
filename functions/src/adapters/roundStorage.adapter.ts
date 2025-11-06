@@ -1,6 +1,6 @@
-import {db} from "../clients/firebase/firestore.client";
-import {bucket} from "../clients/firebase/gcs.client";
-import {makeGCSPath} from "../helpers/gcs.helper";
+import {db} from "../clients/firebase/firestore.client.js";
+import {bucket} from "../clients/firebase/gcs.client.js";
+import {makeGCSPath} from "../helpers/gcs.helper.js";
 import {writeBatch, doc, getDoc} from "firebase/firestore";
 
 interface PersistResult {

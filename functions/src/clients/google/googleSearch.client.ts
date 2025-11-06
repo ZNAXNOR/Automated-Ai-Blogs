@@ -1,4 +1,4 @@
-import {searchCse, SearchResult, SearchOpts} from "./googleCse.client";
+import {searchCse, SearchResult, SearchOpts} from "./googleCse.client.js";
 import axios from "axios";
 
 interface ClientOpts extends SearchOpts {

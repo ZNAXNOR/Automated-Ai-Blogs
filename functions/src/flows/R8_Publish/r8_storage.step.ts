@@ -1,5 +1,5 @@
-import {ai} from "../../clients/genkitInstance.client";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter";
+import {ai} from "../../clients/genkitInstance.client.js";
+import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
 
 export const round8StorageStep = async (pipelineId: string, data: any) => {
   return await ai.run("Round8_Storage", async () => {

@@ -1,6 +1,6 @@
 import {z} from "zod";
-import {r4MetaOutput} from "./r4_meta.schema";
-import {r8PublishOutput} from "./r8_publish.schema";
+import {r4MetaOutput} from "./r4_meta.schema.js";
+import {r8PublishOutput} from "./r8_publish.schema.js";
 
 export const orchestratorInput = z.object({
   topic: z.union([z.string(), z.array(z.string())])

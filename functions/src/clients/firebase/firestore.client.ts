@@ -20,10 +20,10 @@ import {z} from "zod";
 // Note: The interfaces might need adjustment if they rely on Admin SDK types.
 import {
   Article, Author, Category, Tag,
-} from "@src/interfaces/firestore.interface";
+} from "@src/interfaces/firestore.interface.js";
 import {
   ArticleSchema, AuthorSchema, CategorySchema, TagSchema,
-} from "@src/schemas/storage/firestore.schema";
+} from "@src/schemas/storage/firestore.schema.js";
 
 // ---- Environment Variables ----
 const projectId = process.env.GCP_PROJECT_ID;

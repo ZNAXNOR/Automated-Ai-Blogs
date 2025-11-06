@@ -1,5 +1,5 @@
 import axios from "axios";
-import {normalizeTopicList} from "../../utils/normalize.util";
+import {normalizeTopicList} from "../../utils/normalize.util.js";
 
 interface GoogleTrendsParams {
   topic: string;

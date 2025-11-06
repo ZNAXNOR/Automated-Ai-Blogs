@@ -1,9 +1,9 @@
-import {search} from "../clients/google/googleSearch.client";
-import {ai} from "../clients/genkitInstance.client";
+import {search} from "../clients/google/googleSearch.client.js";
+import {ai} from "../clients/genkitInstance.client.js";
 import {
   googleSearchInputSchema,
   googleSearchOutputSchema,
-} from "../schemas/tools/googleSearch.schema";
+} from "../schemas/tools/googleSearch.schema.js";
 
 export const googleSearchTool = ai.defineTool(
   {

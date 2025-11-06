@@ -1,6 +1,6 @@
-import {googleSearchTool} from "./googleSearch.tool";
-import {urlContextTool} from "./urlContext.tool";
+import {googleSearchTool} from "./googleSearch.tool.js";
+import {urlContext} from "./urlContext.tool.js";
 
-export {googleSearchTool, urlContextTool};
+export {googleSearchTool, urlContext};
 
 console.log("[Tools]          All tool      modules registered");
