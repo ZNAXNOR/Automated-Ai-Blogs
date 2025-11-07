@@ -1,5 +1,7 @@
 import {searchCse, SearchResult, SearchOpts} from "./googleCse.client.js";
 import axios from "axios";
+import { defineSecret } from "firebase-functions/params";
+import { GOOGLE_CSE_CX_CONFIG } from "@src/index.js";
 
 interface ClientOpts extends SearchOpts {
   useFallback?: boolean;
@@ -64,8 +66,8 @@ export async function search(
   const {useFallback = true, ...rest} = opts;
 
   const cseKey = opts.cseKey || process.env.GOOGLE_CSE_API_KEY;
-  const cseCx = opts.cseCx || process.env.GOOGLE_CSE_CX;
-  const serpApiKey = opts.serpApiKey || process.env.SERPAPI_KEY;
+  const cseCx = opts.cseCx || GOOGLE_CSE_CX_CONFIG.value();
+  const serpApiKey = defineSecret("SERPAPI_KEY");
 
   if (cseKey && cseCx) {
     try {
@@ -74,14 +76,14 @@ export async function search(
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.warn(`[searchClient] CSE failed, fallback: ${errorMessage}`);
       if (useFallback && serpApiKey) {
-        return await gsearchSerpApi(query, {...rest, apiKey: serpApiKey});
+        return await gsearchSerpApi(query, {...rest, apiKey: serpApiKey.value()});
       }
       throw err;
     }
   }
 
   if (serpApiKey) {
-    return await gsearchSerpApi(query, {...rest, apiKey: serpApiKey});
+    return await gsearchSerpApi(query, {...rest, apiKey: serpApiKey.value()});
   }
 
   throw new Error("No search provider configured. " +

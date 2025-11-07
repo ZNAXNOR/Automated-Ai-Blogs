@@ -4,7 +4,7 @@
  * Utility functions for consistent GCS path generation and round mapping.
  */
 
-const GCS_BUCKET_NAME = process.env.GCS_BUCKET_NAME || "ai-blog-bucket";
+import { GCS_BUCKET_NAME_CONFIG } from "@src/index.js";
 
 /**
  * Map round → subfolder
@@ -38,6 +38,7 @@ export function makeGCSPath(
   round: string,
   ext = "json"
 ): string {
+  const GCS_BUCKET_NAME = GCS_BUCKET_NAME_CONFIG.value();
   const roundFolder = getRoundFolder(round);
   const now = new Date();
   const year = now.getFullYear();

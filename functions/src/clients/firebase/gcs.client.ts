@@ -1,47 +1,59 @@
 /**
  * gcs.client.ts
  * --------------
- * Initializes a Google Cloud Storage client.
+ * Initializes a Google Cloud Storage client for a production environment.
  * Provides upload and delete helpers.
  */
 
-import {Storage, StorageOptions} from "@google-cloud/storage";
-import fs from "fs";
+import {Storage, StorageOptions, Bucket} from "@google-cloud/storage";
+import {defineSecret} from "firebase-functions/params";
 import path from "path";
+import {GCP_PROJECT_ID_CONFIG} from "@src/index.js";
+import { GCS_BUCKET_NAME_CONFIG } from "@src/index.js";
 
 // ---- Local Imports ----
 import {GCSUploadResult} from "@src/interfaces/gcs.interface.js";
 import {makeGCSPath} from "@src/helpers/gcs.helper.js";
 import {GCSArtifactSchema} from "@src/schemas/storage/gcs.schema.js";
 
-// --- Environment Variables & Client Initialization ---
-const projectId = process.env.GCP_PROJECT_ID;
-const bucketName = process.env.GCS_BUCKET_NAME;
-const serviceAccountPath = process.env.GCP_SERVICE_ACCOUNT_JSON;
-const isEmulator = process.env.USE_FIREBASE_EMULATOR === "true";
+// --- Environment Variables & Secret Definition ---
+const gcpServiceAccountJsonSecret = defineSecret("GCP_SERVICE_ACCOUNT_JSON");
 
-const storageConfig: StorageOptions = {projectId};
+let bucketInstance: Bucket | null = null;
 
-if (isEmulator) {
-  console.log("⚙️ Using GCS Emulator (Firebase Storage) at localhost:9199");
-  storageConfig.apiEndpoint = "http://localhost:9199";
-  process.env.GOOGLE_CLOUD_DISABLE_CERT_VALIDATION = "true";
-} else {
-  if (!serviceAccountPath) {
-    throw new Error("Missing GCP_SERVICE_ACCOUNT_JSON environment variable");
+function getStorageBucket(): Bucket {
+  if (bucketInstance) {
+    return bucketInstance;
   }
-  if (!fs.existsSync(serviceAccountPath)) {
-    throw new Error(`Missing service account file: ${serviceAccountPath}`);
+
+  const projectId = GCP_PROJECT_ID_CONFIG.value();
+  const bucketName = GCS_BUCKET_NAME_CONFIG.value();
+
+  if (!bucketName) {
+    throw new Error("Missing GCS_BUCKET_NAME environment variable");
   }
-  storageConfig.keyFilename = serviceAccountPath;
+
+  const storageConfig: StorageOptions = {projectId};
+
+  const secretValue = gcpServiceAccountJsonSecret.value();
+  if (!secretValue) {
+      throw new Error("GCP_SERVICE_ACCOUNT_JSON secret is not available. Ensure it is set in your Firebase environment.");
+  }
+
+  try {
+      storageConfig.credentials = JSON.parse(secretValue);
+  } catch(e) {
+      throw new Error("Failed to parse GCP_SERVICE_ACCOUNT_JSON secret. Ensure it is valid JSON.");
+  }
+
+  const storage = new Storage(storageConfig);
+  bucketInstance = storage.bucket(bucketName);
+  console.log("[GCS] Storage bucket client initialized for production.");
+  return bucketInstance;
 }
 
-if (!bucketName) {
-  throw new Error("Missing GCS_BUCKET_NAME environment variable");
-}
+export {getStorageBucket as bucket};
 
-const storage = new Storage(storageConfig);
-export const bucket = storage.bucket(bucketName);
 
 /**
  * Uploads a local file to GCS.
@@ -59,6 +71,7 @@ export async function uploadFile(
   destination: string,
   makePublic = true
 ): Promise<GCSUploadResult> {
+  const bucket = getStorageBucket();
   console.log(
     `[GCS] Uploading ${localPath} to gs://${bucket.name}/${destination}...`
   );
@@ -98,6 +111,7 @@ export async function uploadFile(
  * @return {Promise<void>} A promise that resolves when the file is deleted.
  */
 export async function deleteFile(destination: string): Promise<void> {
+  const bucket = getStorageBucket();
   console.log(`[GCS] Deleting gs://${bucket.name}/${destination}...`);
   await bucket.file(destination).delete({ignoreNotFound: true});
 }
@@ -118,6 +132,7 @@ export async function uploadArtifact(
   localFilePath: string,
   description?: string
 ): Promise<void> {
+  const bucket = getStorageBucket();
   console.log(
     `[GCS] Uploading artifact for pipeline ${pipelineId}, round ${round}...`
   );
@@ -147,13 +162,3 @@ export async function uploadArtifact(
     `[GCS Upload] ✅ Uploaded ${pipelineId}_${round} → ${result.publicUrl}`
   );
 }
-
-/**
- * Example usage:
- *
- * import { uploadArtifact, deleteFile } from './gcs.client';
- *
- * await uploadArtifact(
- *  'abc12345', 'r4', './tmp/meta.json', 'Metadata output for round 4');
- * await deleteFile('meta/abc12345_r4.json');
- */

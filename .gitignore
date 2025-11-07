@@ -19,8 +19,6 @@ firebase-debug.*.log*
 
 *.firebase-service-account.json
 
-**/dev.nix
-
 # Runtime data
 pids
 *.pid

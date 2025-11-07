@@ -1,5 +1,6 @@
 // wordpress.client.ts
 import axios, {AxiosInstance} from "axios";
+import { WP_API_URL_CONFIG, WP_PASSWORD_CONFIG, WP_USERNAME_CONFIG } from "@src/index.js";
 
 /**
  * Lightweight WordPress REST client with helpers:
@@ -10,22 +11,14 @@ import axios, {AxiosInstance} from "axios";
  * Requires env:
  * - WP_API_URL
  * - WP_USERNAME
+ * And secret:
  * - WP_PASSWORD
  *
  * NOTE: Does not upload media. `featuredImage` in meta is a prompt
  * descriptor, not an upload.
  */
 
-const WP_API_URL = process.env.WP_API_URL;
-const WP_USERNAME = process.env.WP_USERNAME;
-const WP_PASSWORD = process.env.WP_PASSWORD;
-
-if (!WP_API_URL) {
-  throw new Error("Missing environment variable: WP_API_URL");
-}
-if (!WP_USERNAME || !WP_PASSWORD) {
-  throw new Error("Missing WP credentials: WP_USERNAME and/or WP_PASSWORD");
-}
+let instance: AxiosInstance | null = null;
 
 /**
  * Creates a basic auth header.
@@ -38,14 +31,44 @@ function makeAuthHeader(username: string, password: string): string {
   return `Basic ${token}`;
 }
 
-const instance: AxiosInstance = axios.create({
-  baseURL: WP_API_URL.replace(/\/+$/, ""),
-  timeout: 20_000,
-  headers: {
-    "Content-Type": "application/json",
-    "Authorization": makeAuthHeader(WP_USERNAME, WP_PASSWORD),
-  },
-});
+/**
+ * Lazily initializes and returns the Axios instance for WordPress API.
+ * This ensures secrets are available at runtime.
+ * @return {AxiosInstance} The initialized Axios instance.
+ */
+function getApiClient(): AxiosInstance {
+  if (instance) {
+    return instance;
+  }
+
+  const apiUrl = WP_API_URL_CONFIG.value();
+  const username = WP_USERNAME_CONFIG.value();
+  const password = WP_PASSWORD_CONFIG.value();
+
+  if (!apiUrl) {
+    throw new Error("Missing environment variable: WP_API_URL");
+  }
+  if (!username) {
+    throw new Error("Missing environment variable: WP_USERNAME");
+  }
+  if (!password) {
+    throw new Error(
+      "WordPress password secret (WP_PASSWORD) is not available. " +
+      "Ensure it is set in your Firebase environment."
+    );
+  }
+
+  instance = axios.create({
+    baseURL: apiUrl.replace(/\/+$/, ""),
+    timeout: 20_000,
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": makeAuthHeader(username, password),
+    },
+  });
+
+  return instance;
+}
 
 interface WPCategory {
   id: number;
@@ -82,7 +105,8 @@ export async function createPost(
     date: payload.date,
     slug: payload.slug,
   });
-  const resp = await instance.post("/wp-json/wp/v2/posts", payload);
+  const client = getApiClient();
+  const resp = await client.post("/wp-json/wp/v2/posts", payload);
   return resp.data;
 }
 
@@ -94,8 +118,9 @@ export async function createPost(
  */
 export async function ensureCategory(name: string): Promise<number> {
   if (!name) throw new Error("Category name required");
+  const client = getApiClient();
   // Search (WP returns fuzzy matches; we attempt to find exact match)
-  const searchResp = await instance.get("/wp-json/wp/v2/categories", {
+  const searchResp = await client.get("/wp-json/wp/v2/categories", {
     params: {search: name, per_page: 10},
   });
   const candidates = searchResp.data as WPCategory[];
@@ -106,7 +131,7 @@ export async function ensureCategory(name: string): Promise<number> {
   if (exact?.id) return exact.id;
 
   // Not found -> create
-  const createResp = await instance.post("/wp-json/wp/v2/categories", {name});
+  const createResp = await client.post("/wp-json/wp/v2/categories", {name});
   return createResp.data.id;
 }
 
@@ -117,7 +142,8 @@ export async function ensureCategory(name: string): Promise<number> {
  */
 export async function ensureTag(name: string): Promise<number> {
   if (!name) throw new Error("Tag name required");
-  const searchResp = await instance.get("/wp-json/wp/v2/tags", {
+  const client = getApiClient();
+  const searchResp = await client.get("/wp-json/wp/v2/tags", {
     params: {search: name, per_page: 10},
   });
   const candidates = searchResp.data as WPTag[];
@@ -126,7 +152,7 @@ export async function ensureTag(name: string): Promise<number> {
   );
   if (exact?.id) return exact.id;
 
-  const createResp = await instance.post("/wp-json/wp/v2/tags", {name});
+  const createResp = await client.post("/wp-json/wp/v2/tags", {name});
   return createResp.data.id;
 }
 

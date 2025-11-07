@@ -51,7 +51,7 @@ type TrendResult = {
  *   lowercase topic strings.
  */
 async function getUsedTopics(): Promise<Set<string>> {
-  const usedTopicsCollection = collection(db, "usedTopics");
+  const usedTopicsCollection = collection(db(), "usedTopics");
   const snapshot = await getDocs(usedTopicsCollection);
   const topics = new Set<string>();
   snapshot.forEach((doc) => topics.add(doc.id.toLowerCase()));
@@ -75,7 +75,7 @@ async function storeNewTopics(category: string, topics: Suggestion[]) {
   const now = new Date();
   const year = `${now.getFullYear()}`;
   const month = `${year}-${(now.getMonth() + 1).toString().padStart(2, "0")}`;
-  const docRef = doc(db, "topics", category, year, month);
+  const docRef = doc(db(), "topics", category, year, month);
 
   // Sort topics by score in descending order before storing.
   const sortedTopics = [...topics].sort((a, b) => b.score - a.score);

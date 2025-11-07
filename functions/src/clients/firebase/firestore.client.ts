@@ -1,7 +1,7 @@
 /**
  * firestore.client.ts
  * -------------------
- * Central Firestore client initialization + typed helpers.
+ * Central Firestore client initialization for a production environment.
  * Integrates Zod schema validation (runtime) and TypeScript interfaces
  * (compile-time).
  */
@@ -10,14 +10,17 @@ import {
   initializeApp, getApps, getApp, FirebaseApp,
 } from "firebase/app";
 import {
-  getFirestore, connectFirestoreEmulator, Firestore, DocumentReference,
+  getFirestore, Firestore, DocumentReference,
   collection, CollectionReference, doc, setDoc, getDocs, query, where,
   QueryDocumentSnapshot, DocumentData,
 } from "firebase/firestore";
 import {z} from "zod";
+import fs from "fs";
+import os from "os";
+import path from "path";
+import {defineSecret} from "firebase-functions/params";
 
 // ---- Local Imports ----
-// Note: The interfaces might need adjustment if they rely on Admin SDK types.
 import {
   Article, Author, Category, Tag,
 } from "@src/interfaces/firestore.interface.js";
@@ -25,24 +28,34 @@ import {
   ArticleSchema, AuthorSchema, CategorySchema, TagSchema,
 } from "@src/schemas/storage/firestore.schema.js";
 
-// ---- Environment Variables ----
-const projectId = process.env.GCP_PROJECT_ID;
+// ---- Environment Variables & Secret Definition ----
+const gcpServiceAccountJsonSecret = defineSecret("GCP_SERVICE_ACCOUNT_JSON");
 
-// ---- Initialize Firebase App (Singleton) ----
-console.log("[Firestore] Initializing Firebase app...");
-const app: FirebaseApp = getApps().length ?
-  getApp() :
-  initializeApp({projectId});
+let dbInstance: Firestore | null = null;
 
-// ---- Initialize Firestore ----
-console.log("[Firestore] Initializing Firestore client...");
-export const db: Firestore = getFirestore(app);
+function getFirestoreDb(): Firestore {
+    if (dbInstance) {
+        return dbInstance;
+    }
 
-// Connect to local emulator if applicable
-if (process.env.USE_FIREBASE_EMULATOR === "true") {
-  console.log("⚙️ Using Firestore Emulator at localhost:8080");
-  connectFirestoreEmulator(db, "localhost", 8080);
+    const secretValue = gcpServiceAccountJsonSecret.value();
+    if (!secretValue) {
+        throw new Error("GCP_SERVICE_ACCOUNT_JSON secret not available in deployed environment. Ensure it is set.");
+    }
+
+    const tempPath = path.join(os.tmpdir(), `sa-${Date.now()}.json`);
+    fs.writeFileSync(tempPath, secretValue);
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = tempPath;
+    console.log("[Firestore] Authenticating using credentials from secret.");
+    
+    const app: FirebaseApp = getApps().length ? getApp() : initializeApp();
+    dbInstance = getFirestore(app);
+    console.log("[Firestore] Firestore client initialized for production.");
+
+    return dbInstance;
 }
+
+export { getFirestoreDb as db };
 
 // ---- Article Status Enum ----
 export type ArticleStatus =
@@ -50,10 +63,10 @@ export type ArticleStatus =
 
 // ---- Typed Collection Accessors ----
 export const collections = {
-  articles: () => collection(db, "articles"),
-  authors: () => collection(db, "authors"),
-  categories: () => collection(db, "categories"),
-  tags: () => collection(db, "tags"),
+  articles: () => collection(getFirestoreDb(), "articles"),
+  authors: () => collection(getFirestoreDb(), "authors"),
+  categories: () => collection(getFirestoreDb(), "categories"),
+  tags: () => collection(getFirestoreDb(), "tags"),
 };
 
 // ---- Validation + CRUD Helpers ----

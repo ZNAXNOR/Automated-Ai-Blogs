@@ -25,18 +25,18 @@ export async function persistRoundOutput(
   data: Record<string, unknown>
 ): Promise<PersistResult> {
   const gcsPath = makeGCSPath(pipelineId, round);
-  const gcsStoragePath = `gs://${bucket.name}/pipelines/${pipelineId}`;
-  const file = bucket.file(gcsPath.replace(`gs://${bucket.name}/`, ""));
+  const gcsStoragePath = `gs://${bucket().name}/pipelines/${pipelineId}`;
+  const file = bucket().file(gcsPath.replace(`gs://${bucket().name}/`, ""));
   await file.save(JSON.stringify(data, null, 2), {
     resumable: false,
     gzip: true,
     metadata: {contentType: "application/json"},
   });
-  const publicUrl = `https://storage.googleapis.com/${bucket.name}/${file.name}`;
+  const publicUrl = `https://storage.googleapis.com/${bucket().name}/${file.name}`;
   const createdAt = new Date().toISOString();
-  const batch = writeBatch(db);
+  const batch = writeBatch(db());
   const firestorePaths: string[] = [];
-  const pipelineRef = doc(db, "pipelines", pipelineId);
+  const pipelineRef = doc(db(), "pipelines", pipelineId);
   firestorePaths.push(pipelineRef.path);
 
   const pipelineUpdateData: {[key: string]: unknown} = {
@@ -48,7 +48,7 @@ export async function persistRoundOutput(
   switch (round) {
   case "r1": {
     const topicRef = doc(
-      db,
+      db(),
       "usedTopics",
       (data.topic as string).toLowerCase(),
       "details",
@@ -67,7 +67,7 @@ export async function persistRoundOutput(
     break;
   }
   case "r2": {
-    const metaRef = doc(db, "metadata", pipelineId);
+    const metaRef = doc(db(), "metadata", pipelineId);
     const roundMetadata = {
       researchNotes: data.researchNotes,
     };
@@ -83,7 +83,7 @@ export async function persistRoundOutput(
   }
   case "r4":
   case "r5": {
-    const metaRef = doc(db, "metadata", pipelineId);
+    const metaRef = doc(db(), "metadata", pipelineId);
 
     const {
       featuredImage,
@@ -112,7 +112,7 @@ export async function persistRoundOutput(
     break;
   }
   case "r8": {
-    const metaRef = doc(db, "metadata", pipelineId);
+    const metaRef = doc(db(), "metadata", pipelineId);
     const roundMetadata = {
       wordpressLink: (data.output as {link: string})?.link,
       status: (data.output as {status: string})?.status || "published",
@@ -158,7 +158,7 @@ export async function persistRoundOutput(
  * @return {Promise<any>} - The pipeline summary data.
  */
 export async function getPipelineSummary(pipelineId: string) {
-  const docRef = doc(db, "pipelines", pipelineId);
+  const docRef = doc(db(), "pipelines", pipelineId);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
   return docSnap.data();
@@ -173,7 +173,7 @@ export async function getPipelineSummary(pipelineId: string) {
  */
 export async function verifyRoundBlob(pipelineId: string, round: string) {
   const gcsPath = makeGCSPath(pipelineId, round);
-  const file = bucket.file(gcsPath.replace(`gs://${bucket.name}/`, ""));
+  const file = bucket().file(gcsPath.replace(`gs://${bucket().name}/`, ""));
   const [exists] = await file.exists();
   return {exists, gcsPath};
 }

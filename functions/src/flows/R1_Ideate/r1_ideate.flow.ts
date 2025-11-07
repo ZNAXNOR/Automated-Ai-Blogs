@@ -41,7 +41,7 @@ console.log("[r1Ideate] Flow module loaded");
  */
 async function storeUsedTopic(topic: string, pipelineId: string) {
   if (!topic) return;
-  const docRef = doc(db, "usedTopics", topic.toLowerCase());
+  const docRef = doc(db(), "usedTopics", topic.toLowerCase());
   // Store the topic with a timestamp and the pipeline ID for traceability.
   await setDoc(
     docRef,

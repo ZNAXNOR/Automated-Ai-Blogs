@@ -31,6 +31,7 @@ import {metaPrompt} from "../../prompts/flows/r4_meta.prompt.js";
 import {safeParseJsonFromAI} from "../../clients/aiParsing.client.js";
 import fetch from "node-fetch";
 import {round4StorageStep} from "./r4_storage.step.js";
+import { WP_API_URL_CONFIG } from "@src/index.js";
 
 console.log("[r4Meta] Flow module loaded");
 
@@ -71,7 +72,7 @@ export const r4Meta = ai.defineFlow(
     console.log(
       `[r4Meta] Starting metadata generation for pipeline: ${pipelineId}`
     );
-    const wordpressApiUrl = process.env.WP_API_URL;
+    const wordpressApiUrl = WP_API_URL_CONFIG.value();
 
     let finalOutput: R4MetaOutput;
 
