@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Genkit Demo</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <h1>Blog Generator</h1>
+    <div id="signin" hidden>
+      <button id="signinBtn">Sign in with Google</button>
+    </div>
+    <div id="callGenkit" hidden>
+      <p>Enter a topic to generate a blog post about it.</p>
+      <input type="text" id="topic" placeholder="e.g. Artificial Intelligence"/>
+      <button id="runOrchestratorBtn">Generate Blog Post</button>
+      <div id="result"></div>
+    </div>
+    <script type="module" src="./firebaseSDK.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

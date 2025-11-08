@@ -20,5 +20,27 @@
       "PKief.material-icon-theme"
       "yzhang.markdown-all-in-one"
     ];
+
+    # Enable previews and customize configuration
+    previews = {
+      enable = true;
+      previews = {
+        # The following object sets web previews
+        web = {
+          command = [
+            "npm"
+            "run"
+            "start"
+            "--"
+            "--port"
+            "$PORT"
+            "--host"
+            "0.0.0.0"
+            "--disable-host-check"
+          ];
+          manager = "web";
+        };
+      };
+    };
   };
 }
