@@ -1,4 +1,4 @@
-import {z} from "zod";
+import { z } from "zod";
 
 export const urlContextInputSchema = z.object({
   url: z.string().url().describe("The URL to fetch"),

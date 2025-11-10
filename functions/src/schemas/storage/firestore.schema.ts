@@ -5,17 +5,17 @@
  * Ensures runtime validation of article, author, category, and tag documents.
  */
 
-import {z} from "zod";
+import { z } from 'zod';
 
 /**
  * Valid article status values.
  * Enforced both at runtime and via TypeScript inference.
  */
 export const ArticleStatusEnum = z.enum([
-  "scheduled",
-  "published",
-  "archived",
-  "in_review",
+  'scheduled',
+  'published',
+  'archived',
+  'in_review',
 ]);
 export type ArticleStatus = z.infer<typeof ArticleStatusEnum>;
 

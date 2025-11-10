@@ -1,19 +1,10 @@
-import {ai} from "../../clients/genkitInstance.client.js";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
-import {r1IdeateInput, r1IdeateOutput}
-  from "../../schemas/flows/r1_ideate.schema.js";
-import {z} from "zod";
+import { ai } from '../../clients/genkitInstance.client.js';
+import { persistRoundOutput } from '../../adapters/roundStorage.adapter.js';
 
-export const round1StorageStep = async (
-  pipelineId: string,
-  ideationObj: z.infer<typeof r1IdeateOutput>,
-  parsedInput: z.infer<typeof r1IdeateInput>
-) => {
-  return await ai.run("Round1_Storage", async () => {
-    const args = {
-      pipelineId, round: "r1", data: ideationObj, inputMeta: parsedInput,
-    };
-    const {pipelineId: pId, round = "r1", data} = args;
+export const round1StorageStep = async (pipelineId: string, ideationObj: any, parsedInput: any) => {
+  return await ai.run('Round1_Storage', async () => {
+    const args = { pipelineId, round: 'r1', data: ideationObj, inputMeta: parsedInput };
+    const { pipelineId: pId, round = 'r1', data } = args;
     const startedAt = new Date().toISOString();
 
     try {
@@ -27,10 +18,7 @@ export const round1StorageStep = async (
         finishedAt: new Date().toISOString(),
       };
     } catch (err) {
-      console.error(
-        "[r1_ideate:Round1_Storage] persistRoundOutput failed:",
-        err
-      );
+      console.error(`[r1_ideate:Round1_Storage] persistRoundOutput failed:`, err);
       return {
         ok: false,
         pipelineId: pId,

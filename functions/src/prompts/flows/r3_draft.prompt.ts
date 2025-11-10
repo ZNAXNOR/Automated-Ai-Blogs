@@ -1,11 +1,11 @@
-import {ai} from "../../clients/genkitInstance.client.js";
-import {z} from "zod";
-import {r3DraftOutput} from "../../schemas/flows/r3_draft.schema.js";
+import { ai } from '@src/clients/genkitInstance.client.js';
+import { z } from 'zod';
+import { r3_draft_output } from '@src/schemas/flows/r3_draft.schema.js';
 
 export const draftPrompt = ai.definePrompt({
-  name: "Round3_DraftPrompt",
-  description: "Compiles section drafts into a cohesive, full blog draft.",
-  model: "googleai/gemini-2.0-flash",
+  name: 'Round3_DraftPrompt',
+  description: 'Compiles section drafts into a cohesive, full blog draft.',
+  model: 'googleai/gemini-2.0-flash',
   input: {
     schema: z.object({
       title: z.string().optional(),
@@ -23,15 +23,14 @@ export const draftPrompt = ai.definePrompt({
     }),
   },
   output: {
-    schema: r3DraftOutput,
+    schema: r3_draft_output,
   },
   config: {
     temperature: 0.0,
     maxOutputTokens: 4096,
   },
   prompt: `
-SYSTEM: You are a professional editor compiling multiple blog sections 
-into a cohesive article.
+SYSTEM: You are a professional editor compiling multiple blog sections into a cohesive article.
 
 INPUT:
 - title: {{title}}

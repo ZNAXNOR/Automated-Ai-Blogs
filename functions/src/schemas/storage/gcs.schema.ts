@@ -4,11 +4,11 @@
  * Zod schema for validating GCS blob metadata.
  */
 
-import {z} from "zod";
+import { z } from 'zod';
 
 export const GCSArtifactSchema = z.object({
   pipelineId: z.string(),
-  round: z.string().regex(/^r[0-8]$/, "Round must be between r0 and r8"),
+  round: z.string().regex(/^r[0-8]$/, 'Round must be between r0 and r8'),
   bucketPath: z.string(),
   createdAt: z.string().datetime(),
   sizeBytes: z.number().optional(),

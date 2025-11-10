@@ -1,18 +1,10 @@
-import {collections} from "../clients/firebase/firestore.client.js";
-import {Article} from "../interfaces/firestore.interface.js";
-import {Timestamp, doc, setDoc, query, where,
-  getDocs, QueryDocumentSnapshot, DocumentData}
-  from "firebase/firestore";
+import { collections, getDb } from '../clients/firebase/firestore.client.js';
+import { Article } from '../interfaces/firestore.interface.js';
+import { Timestamp, doc, setDoc, query, where, getDocs } from 'firebase/firestore';
 
-/**
- * Creates a new article in Firestore.
- * @param {Omit<Article, "id" | "createdAt" | "updatedAt">} data The
- * article data to be created.
- * @return {Promise<Article>} The created article with all its fields.
- */
-export async function createArticle(
-  data: Omit<Article, "id" | "createdAt" | "updatedAt">
-): Promise<Article> {
+// ---- Create Article ----
+export async function createArticle(data: Omit<Article, 'id' | 'createdAt' | 'updatedAt'>) {
+  const db = getDb();
   const docRef = doc(collections.articles());
   const now = Timestamp.now();
 
@@ -27,18 +19,10 @@ export async function createArticle(
   return article;
 }
 
-/**
- * Fetches all published articles from Firestore.
- * @return {Promise<Article[]>} A promise that resolves to an array
- * of published articles.
- */
+// ---- Fetch Published Articles ----
 export async function getPublishedArticles(): Promise<Article[]> {
-  const q = query(collections.articles(), where(
-    "status", "==", "published"
-  ));
+  const q = query(collections.articles(), where('status', '==', 'published'));
   const snapshot = await getDocs(q);
 
-  return snapshot.docs.map(
-    (d: QueryDocumentSnapshot<DocumentData>) => d.data() as Article
-  );
+  return snapshot.docs.map((d:any) => d.data() as Article);
 }

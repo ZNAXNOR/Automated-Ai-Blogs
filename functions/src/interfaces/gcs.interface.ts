@@ -13,11 +13,12 @@ export interface GCSArtifactMeta {
     contentType?: string;
     description?: string;
   }
-
-export interface GCSUploadResult {
+  
+  export interface GCSUploadResult {
     publicUrl: string;
     gcsPath: string;
     bucket: string;
     name: string;
     sizeBytes: number;
   }
+  

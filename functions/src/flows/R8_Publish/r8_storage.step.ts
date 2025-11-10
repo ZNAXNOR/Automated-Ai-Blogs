@@ -1,10 +1,10 @@
-import {ai} from "../../clients/genkitInstance.client.js";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
+import { ai } from '../../clients/genkitInstance.client.js';
+import { persistRoundOutput } from '../../adapters/roundStorage.adapter.js';
 
 export const round8StorageStep = async (pipelineId: string, data: any) => {
-  return await ai.run("Round8_Storage", async () => {
-    const args = {pipelineId, round: "r8", data};
-    const {pipelineId: pId, round, data: roundData} = args;
+  return await ai.run('Round8_Storage', async () => {
+    const args = { pipelineId, round: 'r8', data };
+    const { pipelineId: pId, round, data: roundData } = args;
     const startedAt = new Date().toISOString();
 
     try {
@@ -18,9 +18,7 @@ export const round8StorageStep = async (pipelineId: string, data: any) => {
         finishedAt: new Date().toISOString(),
       };
     } catch (err) {
-      console.error(
-        "[r8_publish:Round8_Storage] persistRoundOutput failed:", err
-      );
+      console.error(`[r8_publish:Round8_Storage] persistRoundOutput failed:`, err);
       return {
         ok: false,
         pipelineId: pId,

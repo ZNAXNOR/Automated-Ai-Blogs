@@ -1,20 +1,20 @@
-import {z} from "zod";
-import {r3DraftOutput} from "./r3_draft.schema.js";
-import {r4MetaOutput} from "./r4_meta.schema.js";
+import { z } from "zod";
+import { r3_draft_output } from "./r3_draft.schema.js";
+import { r4_meta_output } from "./r4_meta.schema.js";
 
 /**
- * Input schema for r5Polish
+ * Input schema for r5_polish
  * This combines the draft from r3 and the metadata from r4.
  */
-export const r5PolishInput = z.object({
+export const r5_polish_input = z.object({
   pipelineId: z.string(),
-  draft: r3DraftOutput,
-  meta: r4MetaOutput,
+  draft: r3_draft_output,
+  meta: r4_meta_output,
   tone: z.string().optional(), // Optional tone preference
 });
 
 const polishOutputCore = z.object({
-  polishedBlog: z.string(),
+  polishedBlog: z.string(), // Final blog content (Markdown + hashtags + disclaimer)
   readability: z.object({
     fkGrade: z.number().optional(),
   }),
@@ -32,9 +32,9 @@ const polishOutputCore = z.object({
 });
 
 /**
- * Output schema for r5Polish
+ * Output schema for r5_polish
  * Contains the final polished blog and the pipelineId.
  */
-export const r5PolishOutput = polishOutputCore.extend({
-  pipelineId: z.string(),
+export const r5_polish_output = polishOutputCore.extend({
+    pipelineId: z.string(),
 });

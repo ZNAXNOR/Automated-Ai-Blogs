@@ -1,16 +1,11 @@
-import {z} from "zod";
-import {fetchUrlContext} from "../clients/urlFetcher.client.js";
-import {ai} from "../clients/genkitInstance.client.js";
-import {
-  urlContextInputSchema,
-  urlContextOutputSchema,
-} from "../schemas/tools/urlContext.schema.js";
+import { fetchUrlContext } from "../clients/urlFetcher.client.js";
+import { ai } from "../clients/genkitInstance.client.js";
+import { urlContextInputSchema, urlContextOutputSchema } from "../schemas/tools/urlContext.schema.js";
 
-export const urlContext = ai.defineTool(
+export const urlContextTool = ai.defineTool(
   {
-    name: "urlContext",
-    description:
-      "Fetch a URL and return metadata (title, snippet, images, etc.)",
+    name: "Genkit_FetchUrlContext",
+    description: "Fetch a URL and return metadata (title, snippet, images, etc.)",
     inputSchema: urlContextInputSchema,
     outputSchema: urlContextOutputSchema,
   },
@@ -18,9 +13,7 @@ export const urlContext = ai.defineTool(
     const normalizedUrl = typeof input === "string" ? input : input?.url;
     try {
       if (!normalizedUrl || typeof normalizedUrl !== "string") {
-        throw new Error(
-          "Invalid input: expected a URL string or { url } object"
-        );
+        throw new Error("Invalid input: expected a URL string or { url } object");
       }
 
       console.log(`[urlContextTool] 🟡 Invoked with: ${normalizedUrl}`);
@@ -32,9 +25,7 @@ export const urlContext = ai.defineTool(
         throw new Error(`Empty or invalid response for ${normalizedUrl}`);
       }
 
-      console.log(
-        `[urlContextTool] ✅ Success: fetched context for ${normalizedUrl}`
-      );
+      console.log(`[urlContextTool] ✅ Success: fetched context for ${normalizedUrl}`);
       return {
         url: normalizedUrl,
         title: ctx.title || null,
@@ -48,7 +39,7 @@ export const urlContext = ai.defineTool(
     } catch (err) {
       console.error(`[urlContextTool] ❌ Error for ${normalizedUrl}:`, err);
       return {
-        url: normalizedUrl || "invalid_url",
+        url: normalizedUrl || 'invalid_url',
         title: null,
         summary: null,
         contentType: null,
@@ -60,5 +51,3 @@ export const urlContext = ai.defineTool(
     }
   }
 );
-
-export type UrlContextToolResponse = z.infer<typeof urlContextOutputSchema>;

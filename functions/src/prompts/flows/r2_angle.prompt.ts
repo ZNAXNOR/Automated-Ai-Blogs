@@ -1,6 +1,6 @@
-import {ai} from "../../clients/genkitInstance.client.js";
-import {z} from "zod";
-import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema.js";
+import { ai } from '../../clients/genkitInstance.client.js';
+import { z } from 'zod';
+import { r2_angle_output } from '../../schemas/flows/r2_angle.schema.js';
 
 /**
  * Round2_AnglePrompt
@@ -17,11 +17,10 @@ import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema.js";
  */
 
 export const anglePrompt = ai.definePrompt({
-  name: "Round2_AnglePrompt",
+  name: 'Round2_AnglePrompt',
   description:
-    "Synthesizes a grounded blog outline using topic ideas and factual " +
-    "research notes.",
-  model: "googleai/gemini-2.5-flash",
+    'Synthesizes a grounded blog outline using topic ideas and factual research notes.',
+  model: 'googleai/gemini-2.5-flash',
 
   input: {
     schema: z.object({
@@ -55,29 +54,25 @@ export const anglePrompt = ai.definePrompt({
   },
 
   output: {
-    schema: r2AngleOutput,
+    schema: r2_angle_output,
   },
 
-  config: {temperature: 0.1},
+  config: { temperature: 0.1 },
 
   prompt: `
 SYSTEM:
 You are a precise blog strategy and content planning assistant.
-You will synthesize a structured outline grounded **only** in 
-verified research notes.
+You will synthesize a structured outline grounded **only** in verified research notes.
 
 TASK:
 1. Review the user's topic ideas.
 2. Review the factual summaries and metadata.
-3. Create a comprehensive blog outline that reflects SEO intent, topical
-   authority, and logical flow.
-4. Use information *strictly* from researchNotes summaries — do NOT 
-  invent or assume data.
+3. Create a comprehensive blog outline that reflects SEO intent, topical authority, and logical flow.
+4. Use information *strictly* from researchNotes summaries — do NOT invent or assume data.
 5. Include:
    - Introduction
    - 5–8 main sections (id: s1, s2, ...)
-   - Each section has: heading, 3–5 concise bullets, estWords 
-    (estimated word count)
+   - Each section has: heading, 3–5 concise bullets, estWords (estimated word count)
    - Conclusion section
 
 STYLE:
@@ -94,7 +89,7 @@ RESEARCH NOTES:
 
 
 OUTPUT FORMAT:
-Return ONLY valid JSON matching r2AngleOutput schema.
+Return ONLY valid JSON matching r2_angle_output schema.
 Do not include Markdown, prose, or code fences.
 
 EXAMPLE OUTPUT STRUCTURE:
@@ -102,16 +97,10 @@ EXAMPLE OUTPUT STRUCTURE:
   "outline": {
     "title": "<final blog title>",
     "sections": [
-      { "id": "s1", "heading": "Introduction", 
-                    "bullets": ["..."], 
-                    "estWords": 120 },
-      { "id": "s2", "heading": "...", 
-                    "bullets": ["..."], 
-                    "estWords": 180 },
+      { "id": "s1", "heading": "Introduction", "bullets": ["..."], "estWords": 120 },
+      { "id": "s2", "heading": "...", "bullets": ["..."], "estWords": 180 },
       ...
-      { "id": "sN", "heading": "Conclusion", 
-                    "bullets": ["..."], 
-                    "estWords": 100 }
+      { "id": "sN", "heading": "Conclusion", "bullets": ["..."], "estWords": 100 }
     ]
   },
   "researchNotesUsed": ["<url1>", "<url2>", ...]

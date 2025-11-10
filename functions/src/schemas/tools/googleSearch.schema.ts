@@ -1,4 +1,4 @@
-import {z} from "zod";
+import { z } from "zod";
 
 export const googleSearchInputSchema = z.object({
   query: z.string().describe("Search query"),

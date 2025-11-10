@@ -1,9 +1,9 @@
-import {z} from "zod";
-import {r1IdeateOutput} from "./r1_ideate.schema.js";
+import { z } from "zod";
+import { r1_ideate_output } from "./r1_ideate.schema.js";
 
 // r2 input is the output of r1.
 // This assumes the orchestrator runs this flow for one idea at a time.
-export const r2AngleInput = r1IdeateOutput;
+export const r2_angle_input = r1_ideate_output;
 
 const angleOutputCore = z.object({
   researchNotes: z.array(
@@ -27,8 +27,7 @@ const angleOutputCore = z.object({
   }),
 });
 
-// The final output of the r2 flow must include the pipelineId for
-// the next step.
-export const r2AngleOutput = angleOutputCore.extend({
+// The final output of the r2 flow must include the pipelineId for the next step.
+export const r2_angle_output = angleOutputCore.extend({
   pipelineId: z.string(),
 });

@@ -1,9 +1,6 @@
 import axios from "axios";
 import * as cheerio from "cheerio";
 
-/**
- * Represents the context of a URL.
- */
 export interface UrlContext {
   url: string;
   title?: string;
@@ -13,18 +10,11 @@ export interface UrlContext {
   lang?: string | null;
 }
 
-/**
- * Fetches the context of a URL.
- * @param {string} rawUrl The URL to fetch.
- * @return {Promise<UrlContext>} A promise that resolves to the URL context.
- */
 export async function fetchUrlContext(rawUrl: string): Promise<UrlContext> {
   const res = await axios.get(rawUrl, {
     timeout: 10_000,
     headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
-        "AppleWebKit/537.36 (KHTML, like Gecko) " +
-        "Chrome/91.0.4472.124 Safari/537.36",
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
     },
   });
   const html = res.data as string;

@@ -5,12 +5,12 @@
  * Works seamlessly with Firestore client (firestore.client.ts).
  */
 
-import {Timestamp, DocumentReference} from "firebase-admin/firestore";
-import type {ArticleStatus} from "../clients/firebase/firestore.client.js";
+import { Timestamp, DocumentReference } from 'firebase-admin/firestore';
+import type { ArticleStatus } from '../clients/firebase/firestore.client.js';
 
 // ---- Common Reusable Types ----
 export interface BaseDoc {
-  id?: string; // Auto-assigned Firestore ID
+  id?: string;               // Auto-assigned Firestore ID
   createdAt?: Timestamp;
   updatedAt?: Timestamp;
 }
@@ -66,10 +66,10 @@ export interface Article extends BaseDoc {
 }
 
 // ---- Type Guards ----
-export function isArticle(doc: unknown): doc is Article {
+export function isArticle(doc: any): doc is Article {
   return (
-    typeof (doc as Article)?.title === "string" &&
-    typeof (doc as Article)?.slug === "string" &&
-    typeof (doc as Article)?.status === "string"
+    typeof doc?.title === 'string' &&
+    typeof doc?.slug === 'string' &&
+    typeof doc?.status === 'string'
   );
 }

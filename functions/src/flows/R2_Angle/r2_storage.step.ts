@@ -1,14 +1,10 @@
-import {ai} from "../../clients/genkitInstance.client.js";
-import {persistRoundOutput} from "../../adapters/roundStorage.adapter.js";
-import {r2AngleOutput} from "../../schemas/flows/r2_angle.schema.js";
-import {z} from "zod";
+import { ai } from '../../clients/genkitInstance.client.js';
+import { persistRoundOutput } from '../../adapters/roundStorage.adapter.js';
 
-export const round2StorageStep = async (
-  pipelineId: string, data: z.infer<typeof r2AngleOutput>
-) => {
-  return await ai.run("Round2_Storage", async () => {
-    const args = {pipelineId, round: "r2", data};
-    const {pipelineId: pId, round, data: roundData} = args;
+export const round2StorageStep = async (pipelineId: string, data: any) => {
+  return await ai.run('Round2_Storage', async () => {
+    const args = { pipelineId, round: 'r2', data };
+    const { pipelineId: pId, round, data: roundData } = args;
     const startedAt = new Date().toISOString();
 
     try {
@@ -22,10 +18,7 @@ export const round2StorageStep = async (
         finishedAt: new Date().toISOString(),
       };
     } catch (err) {
-      console.error(
-        "[r2_angle:Round2_Storage] persistRoundOutput failed:",
-        err
-      );
+      console.error(`[r2_angle:Round2_Storage] persistRoundOutput failed:`, err);
       return {
         ok: false,
         pipelineId: pId,
