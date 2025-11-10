@@ -19,11 +19,22 @@
     "rewrites": [
       {
         "source": "/orchestrator",
-        "function": "orchestrator"
+        "function": "orchestratorFlow"
       },
       {
         "source": "**",
         "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cross-Origin-Opener-Policy",
+            "value": "same-origin-allow-popups"
+          }
+        ]
       }
     ]
   }

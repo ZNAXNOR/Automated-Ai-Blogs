@@ -1,32 +1,44 @@
 /**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
+ * @file Aggregates all flow definitions for Firebase Cloud Functions
+ * deployment. * This file wraps each flow in `onCallGenkit` and exports
+ * them as individual functions.
  */
 
+import {onCallGenkit} from "firebase-functions/v2/https";
+
+import {defineSecret} from "firebase-functions/params";
+const googleAIapiKey = defineSecret("GEMINI_API_KEY");
+const gcpServiceAccountJsonSecret = defineSecret("GCP_SERVICE_ACCOUNT_JSON");
+const serpApiKey = defineSecret("SERPAPI_KEY");
+
+import {orchestrator} from "./flows/orchestrator.flow.js";
+import {r0Trends} from "./flows/R0_Trends/r0_trends.flow.js";
+import {r1Ideate} from "./flows/R1_Ideate/r1_ideate.flow.js";
+import {r2Angle} from "./flows/R2_Angle/r2_angle.flow.js";
+import {r3Draft} from "./flows/R3_Draft/r3_draft.flow.js";
+import {r4Meta} from "./flows/R4_Meta/r4_meta.flow.js";
+import {r5Polish} from "./flows/R5_Polish/r5_polish.flow.js";
+import {r8Publish} from "./flows/R8_Publish/r8_publish.flow.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {defineString} from "firebase-functions/params";
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Define a common options object for onCallGenkit
+const onCallGenkitOptions = {
+  // authPolicy: (auth: any) => !!auth?.token?.email_verified,
+  secrets: [googleAIapiKey, gcpServiceAccountJsonSecret, serpApiKey],
+  // enforceAppCheck: true,
+  // consumeAppCheckToken: true,
+  cors: ["https://blogwebsite-2004.web.app"],
+};
 
-// For cost control, you can set the maximum number of containers that can be
-// running at the same time. This helps mitigate the impact of unexpected
-// traffic spikes by instead downgrading performance. This limit is a
-// per-function limit. You can override the limit for each function using the
-// `maxInstances` option in the function's options, e.g.
-// `onRequest({ maxInstances: 5 }, (req, res) => { ... })`.
-// NOTE: setGlobalOptions does not apply to functions using the v1 API. V1
-// functions should each use functions.runWith({ maxInstances: 10 }) instead.
-// In the v1 API, each function can only serve one request per container, so
-// this will be the maximum concurrent request count.
+// --- Wrap the Flow in onCallGenkit & Define an authorization policy ---
+export const orchestratorFlow = onCallGenkit(
+  onCallGenkitOptions, orchestrator
+);
+
+console.log("[Flows] All flow modules regstered.");
+
 setGlobalOptions({maxInstances: 10});
-
-export * from "./flows/index.js";
-
 
 // ===============================
 // Parameterized Configuration

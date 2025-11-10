@@ -11,7 +11,7 @@ const firebaseConfig = await fetch('/__/firebase/init.json');
 initializeApp(await firebaseConfig.json());
 
 async function runOrchestrator() {
-  const orchestratorFlow = httpsCallable(getFunctions(), 'orchestrator');
+  const orchestratorFlow = httpsCallable(getFunctions(), 'orchestratorFlow');
   const topic = document.querySelector('#topic').value;
   const resultEl = document.querySelector('#result');
   resultEl.innerText = 'Running...';
