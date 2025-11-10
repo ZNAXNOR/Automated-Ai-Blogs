@@ -1,3 +1,4 @@
+
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js';
 import {
   getAuth,
@@ -5,20 +6,38 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js';
-import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/11.0.1/firebase-functions.js';
 
 const firebaseConfig = await fetch('/__/firebase/init.json');
 initializeApp(await firebaseConfig.json());
 
 async function runOrchestrator() {
-  const orchestratorFlow = httpsCallable(getFunctions(), 'orchestratorFlow');
   const topic = document.querySelector('#topic').value;
   const resultEl = document.querySelector('#result');
   resultEl.innerText = 'Running...';
 
   try {
-    const response = await orchestratorFlow({ topic });
-    const result = response.data;
+    const user = getAuth().currentUser;
+    if (!user) {
+      throw new Error('You must be signed in to run this.');
+    }
+    const idToken = await user.getIdToken();
+
+    const response = await fetch('/orchestrator', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ data: { topic } }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const responseData = await response.json();
+    const result = responseData.result;
+
     resultEl.innerHTML = `
       <h2>${result.title}</h2>
       <p>${result.content}</p>
@@ -34,7 +53,9 @@ function signIn() {
 }
 
 document.querySelector('#signinBtn').addEventListener('click', signIn);
-document.querySelector('#runOrchestratorBtn').addEventListener('click', runOrchestrator);
+document
+  .querySelector('#runOrchestratorBtn')
+  .addEventListener('click', runOrchestrator);
 
 const signinEl = document.querySelector('#signin');
 const genkitEl = document.querySelector('#callGenkit');

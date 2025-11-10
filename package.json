@@ -4,9 +4,11 @@
   },
   "dependencies": {
     "firebase-functions": "^6.6.0",
-    "http-server": "^14.1.1"
+    "http-server": "^14.1.1",
+    "firebase-tools": "^13.11.2"
   },
   "scripts": {
-    "start": "http-server public"
+    "start": "http-server public",
+    "build": "cd functions && npm install && npm run build"
   }
 }

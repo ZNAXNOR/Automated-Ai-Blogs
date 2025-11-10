@@ -2,6 +2,7 @@ import {onCallGenkit} from "firebase-functions/v2/https";
 import {orchestrator} from "@src/flows/orchestrator.flow.js";
 import {setGlobalOptions} from "firebase-functions/v2";
 import {GEMINI_API_KEY_SECRET, GCP_SERVICE_ACCOUNT_JSON_SECRET, SERPAPI_KEY_SECRET} from "./config.js";
+import "./prompts/index.js";
 
 // Set global options BEFORE defining functions
 setGlobalOptions({maxInstances: 10});
@@ -12,7 +13,7 @@ const onCallGenkitOptions = {
   secrets: [GEMINI_API_KEY_SECRET, GCP_SERVICE_ACCOUNT_JSON_SECRET, SERPAPI_KEY_SECRET],
   // enforceAppCheck: true,
   // consumeAppCheckToken: true,
-  cors: ["https://blogwebsite-2004.web.app"],
+  cors: ["https://blogwebsite-2004.web.app", "https://blogwebsite-2004.firebaseapp.com"],
 };
 
 // --- Wrap the Flow in onCallGenkit & Define an authorization policy ---

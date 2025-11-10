@@ -21,7 +21,7 @@ import { ArticleSchema, AuthorSchema, CategorySchema, TagSchema } from '@src/sch
 
 let dbInstance: Firestore;
 
-export function getDb(): Firestore {
+function initializeFirestore() {
     if (!dbInstance) {
         console.log('[Firestore] Initializing Firebase app...');
         const projectId = GCP_PROJECT_ID_CONFIG.value();
@@ -30,6 +30,10 @@ export function getDb(): Firestore {
         console.log('[Firestore] Initializing Firestore client...');
         dbInstance = getFirestore(app);
     }
+}
+
+export function getDb(): Firestore {
+    initializeFirestore();
     return dbInstance;
 }
 

@@ -17,19 +17,23 @@ import { GCSArtifactSchema } from '@src/schemas/storage/gcs.schema.js';
 let storage: Storage;
 let bucketInstance: Bucket;
 
+function initializeGCS() {
+    if (!storage) {
+        const storageConfig: StorageOptions = {};
+        const serviceAccount = GCP_SERVICE_ACCOUNT_JSON_SECRET.value();
+        if (!serviceAccount) throw new Error('Missing GCP_SERVICE_ACCOUNT_JSON secret');
+        storageConfig.credentials = JSON.parse(serviceAccount);
+
+        const bucketName = GCS_BUCKET_NAME_CONFIG.value();
+        if (!bucketName) throw new Error('Missing GCS_BUCKET_NAME secret');
+
+        storage = new Storage(storageConfig);
+        bucketInstance = storage.bucket(bucketName);
+    }
+}
+
 export function getBucket() {
-  if (!bucketInstance) {
-    const storageConfig: StorageOptions = {};
-    const serviceAccount = GCP_SERVICE_ACCOUNT_JSON_SECRET.value();
-    if (!serviceAccount) throw new Error('Missing GCP_SERVICE_ACCOUNT_JSON secret');
-    storageConfig.credentials = JSON.parse(serviceAccount);
-
-    const bucketName = GCS_BUCKET_NAME_CONFIG.value();
-    if (!bucketName) throw new Error('Missing GCS_BUCKET_NAME secret');
-
-    storage = new Storage(storageConfig);
-    bucketInstance = storage.bucket(bucketName);
-  }
+  initializeGCS();
   return bucketInstance;
 }
 

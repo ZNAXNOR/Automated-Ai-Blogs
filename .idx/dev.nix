@@ -23,7 +23,7 @@
 
     # Enable previews and customize configuration
     previews = {
-      enable = true;
+      enable = false;
       previews = {
         # The following object sets web previews
         web = {
